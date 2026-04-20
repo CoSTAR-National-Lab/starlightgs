@@ -285,14 +285,14 @@ OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint Instance
 
     float3 Conic = VS_Conic[index];
 
-    output.Conic = float3(-0.5*Conic.x, -Conic.y,-0.5*Conic.z);
+	output.Conic = float3(-0.5 * Conic.x, -Conic.y, -0.5 * Conic.z);
     output.UVCoord = (Quad[GlobalVertexId] + 1) * 0.5;
 
     float4 quadscale = VS_SSScale[index];
     float2 sspos = VS_SSPositions[index];
     float2 vertex = Quad[GlobalVertexId];
 
-    output.Mean = float2((sspos.xy + 1) * 0.5 * PrimaryView.ViewSizeAndInvSize.xy);
+	output.Mean = float2((float2(sspos.x, -sspos.y) + 1) * 0.5 * PrimaryView.ViewSizeAndInvSize.xy);
     output.Position = float4(sspos.xy + (vertex.x * quadscale.xy + vertex.y * quadscale.zw), 0, 1);
     //output.Position = float4(sspos.xy + (vertex.x * float2(1, 1) + vertex.y * float2(-1,-1)), 0, 1);
 
@@ -321,10 +321,10 @@ float4 GSSplatting_PS(in OutVertex input) : SV_TARGET
     //    gAlbedo = vec4(.01, .005, 0, .01);
     //else
 
-    return float4(input.UVCoord, 0, 1);
+	//return float4(g, 0, 0, 1);
     //return float4(1,1,1, 1) * g;
 
-	//return float4 (input.Color, input.Opacity) * g;
+	return float4 (input.Color, input.Opacity) * g;
     //
     //gPosition = vec4(out_wsPos, 1.0) * g;
     //gNormal = vec4(out_normal, out_opacity) * g;
