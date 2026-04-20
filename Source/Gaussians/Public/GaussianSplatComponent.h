@@ -1,0 +1,56 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/PrimitiveComponent.h"
+
+#include "GSplatAsset.h"
+
+#include "GaussianSplatComponent.generated.h"
+
+
+UCLASS(Blueprintable)
+class GAUSSIANS_API UGaussianSplatComponent : public UPrimitiveComponent
+{
+	GENERATED_BODY()
+public:
+
+	//  TODO: Need custom setter to make it BP-RW
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Gaussian Splats")
+	TObjectPtr<UGSplatAsset> GaussianSplatAsset = nullptr;
+
+public:
+
+	//~ Begin UObject Interface
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+	//~ End UObject Interface
+
+	//~ Begin UActorComponent Interface
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+	//~ End UActorComponent Interface
+
+	//~ Begin UPrimitiveComponent Interface
+	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
+	//~ End UPrimitiveComponent Interface
+
+private:
+	UFUNCTION()
+	void OnAssetUpdated();
+
+private:
+	TObjectPtr<UGSplatAsset> PrevGaussianSplatAsset = nullptr;
+};
+
+
+UCLASS(Blueprintable)
+class GAUSSIANS_API AGaussianSplatActor : public AActor
+{
+	GENERATED_UCLASS_BODY()
+
+protected:
+
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Gaussian Splats", meta=(AllowPrivateAccess=true))
+	TObjectPtr<UGaussianSplatComponent> GaussianSplatComponent;
+};

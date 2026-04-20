@@ -1,0 +1,22 @@
+
+
+// I THINK THIS SHOULD DO LOLOLOLOLO
+
+int {ParameterName}_SplatCount;
+Buffer<float3> {ParameterName}_Positions;
+Buffer<float3> {ParameterName}_Scales;
+Buffer<float4> {ParameterName}_Orientations;
+Buffer<float4> {ParameterName}_SHAndOpacities;
+
+void GetSplatCount_{ParameterName}(out int Count)
+{
+  Count = {ParameterName}_SplatCount;
+}
+
+void GetSplatData_{ParameterName}(in int Index, out float3 Position, out float3 Scale, out float4 Orientation, out float4 SHAndOpacity)
+{
+	Position		=	{ParameterName}_Positions[Index];
+	Scale			=	{ParameterName}_Scales[Index];
+	Orientation		=	{ParameterName}_Orientations[Index].rgba;
+	SHAndOpacity =		{ParameterName}_SHAndOpacities[Index].rgba;
+}

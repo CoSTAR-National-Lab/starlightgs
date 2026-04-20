@@ -1,0 +1,50 @@
+
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "SceneViewExtension.h"
+
+#include "Rendering/GSplatGBuffer.h"
+
+class UWorldSubsystem;
+
+/**
+ * 
+ */
+
+class GAUSSIANS_API FGSViewExtension : public FSceneViewExtensionBase
+{
+public:
+	FGSViewExtension(const FAutoRegister& AutoRegister, UWorldSubsystem* Owner);
+
+	virtual void SetupViewFamily(FSceneViewFamily& InViewFamily) override;
+	virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override;
+	virtual void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override;
+
+	virtual void PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures) override;
+	virtual void PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FPostProcessingInputs& Inputs) override;
+	//FRDGTexture GSplattingTransientTexture;
+
+	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
+
+private:
+	//Rasterization Pipeline // rendering into scene texture to begin with as a post process. later can do 
+	void GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FPostProcessingInputs& Inputs);
+	void GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FPostProcessingInputs& Inputs);
+
+	// Composite splat buffer with GBuffer
+	void GSCompositionPass(FRDGBuilder& GraphBuilder, const FSceneView& InView);
+
+public:
+	void RegisterProxy(class FGaussianSplatSceneProxy* Proxy);
+	void UnregisterProxy(class FGaussianSplatSceneProxy* Proxy);
+
+private:
+	TSet<class FGaussianSplatSceneProxy*> Proxies;
+
+	TMap<FName, FRDGBufferRef> TransientBuffers;
+	FGSplatGBuffer GSplatGBuffer;
+
+	UWorldSubsystem* OwningSubsystem;
+};

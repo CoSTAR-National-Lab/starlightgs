@@ -1,0 +1,41 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0",
+  "Modules": [
+    {
+      "Name": "Gaussians",
+      "Type": "Runtime",
+      "LoadingPhase": "PostConfigInit"
+    },
+    {
+      "Name": "GaussiansEditor",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "FriendlyName": "Gaussians",
+  "Description": "",
+  "Category": "Other",
+  "CreatedBy": "",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "MarketplaceURL": "",
+  "SupportURL": "",
+  "CanContainContent": "true",
+  "Installed": false,
+  "IsBetaVersion": false,
+  "Plugins": [
+    {
+      "Name": "Niagara",
+      "Enabled": true,
+      "SupportedTargetPlatforms": null
+    },
+    {
+      "Name": "ProceduralMeshComponent",
+      "Enabled": true,
+      "SupportedTargetPlatforms": null
+    }
+  ],
+  "SupportedTargetPlatforms": null
+}
