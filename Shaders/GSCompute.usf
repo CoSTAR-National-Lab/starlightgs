@@ -57,34 +57,44 @@ RWBuffer<uint> OutGaussianIDX;
 #define TILE_SIZE_Y 16
 #define TILE_SIZE TILE_SIZE_X*TILE_SIZE_Y
 
-matrix VecToScaleMatrix(in float3 Scale)
+float3x3 VecToScaleMatrix(in float3 Scale)
 {
-    matrix OutMatrix;
+	float3x3 OutMatrix;
 
     OutMatrix[0][0] = Scale.x;
     OutMatrix[1][1] = Scale.y;
     OutMatrix[2][2] = Scale.z;
-    OutMatrix[3][3] = 1.0f;
 
     OutMatrix[1][0] = 0.0f;
     OutMatrix[2][0] = 0.0f;
-    OutMatrix[3][0] = 0.0f;
 
     OutMatrix[0][1] = 0.0f;
     OutMatrix[2][1] = 0.0f;
-    OutMatrix[3][1] = 0.0f;
 
     OutMatrix[0][2] = 0.0f;
     OutMatrix[1][2] = 0.0f;
-    OutMatrix[3][2] = 0.0f;
-
-    OutMatrix[0][3] = 0.0f;
-    OutMatrix[1][3] = 0.0f;
-    OutMatrix[2][3] = 0.0f;
 
     return OutMatrix;
 }
 
+
+float2x2 InverseMat2(float2x2 m)
+{
+	float det = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+	float2x2 inv;
+
+	if (det != 0)
+	{
+		inv[0][0] =  m[1][1] / det;
+		inv[0][1] = -m[0][1] / det;
+		inv[1][0] = -m[1][0] / det;
+		inv[1][1] =  m[0][0] / det;
+	}
+	else
+		inv = 0.0f;
+
+	return inv;
+}
 
 //Mixed Rendering Pipeline
 //1. GSPrepass // most from niagara script
@@ -106,8 +116,8 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
     }
 
 	//Terminate if we are outside the bounds of our input data
-    if (DispatchThreadId.x > GSResources.SplatCount)
-    return;
+    if (DispatchThreadId.x >= GSResources.SplatCount)
+		return;
 
     //ViewState ResolvedView = ResolveView();
     float4x4 ViewMatrix = PrimaryView.TranslatedWorldToView;
@@ -121,14 +131,12 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 
     float4 TranslatedPosition = DFTransformLocalToTranslatedWorld(Position, MakeDFMatrix4x3(Primitive.PositionHigh, Primitive.LocalToRelativeWorld), PrimaryView.PreViewTranslation);
 
-    //TranslatedPosition = DFAdd(TranslatedPosition, PrimaryView.PreViewTranslation);
-
     //apply correct scale because UU
     TranslatedPosition.xyz *= 0.01f;
 
     float4 ViewPosition = mul(TranslatedPosition, ViewMatrix);
 
-    float4 ClipPosition = mul(ViewPosition, ViewToClip);
+	float4 ClipPosition = mul(TranslatedPosition, mul(ViewMatrix, ViewToClip));
 
     //cull depending on how far outside the screen we are
     float clip = 1.05 * ClipPosition.w; //Need to see how conservative that
@@ -141,19 +149,15 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 	//perspective divide to get NDC space
     ClipPosition.xyz = ClipPosition.xyz / ClipPosition.w;
 
-    matrix ScaleMatrix = VecToScaleMatrix(GSResources.Scales[DispatchThreadId.x] * 2.f);
-    float3x3 RM = QuatToMatrix(GSResources.Orientations[DispatchThreadId.x]);
+	float3 Scale = GSResources.Scales[DispatchThreadId.x];
+	float4 Rot = GSResources.Orientations[DispatchThreadId.x];
 
-    RM = mul((float3x3)Primitive.RelativeWorldToLocal, RM);
+	float3x3 ScaleMatrix = VecToScaleMatrix(Scale * 2.f);
+	float3x3 RotationMatrix = QuatToMatrix(Rot);
 
-    //copy pasting niagara code it uses 4x4
-    matrix RotationMatrix = matrix (
-        float4(RM[0], 0),
-        float4(RM[1], 0),
-        float4(RM[2], 0),
-        float4(0, 0, 0, 1)
-    );
+	RotationMatrix = mul((float3x3) Primitive.RelativeWorldToLocal, RotationMatrix);
 
+    /*
     float2 TanHalfFov = float2(ClipToView[0][0], ClipToView[1][1]);
 
     float2 focalL = (ViewSize * 0.5) / TanHalfFov;
@@ -166,41 +170,57 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 
     float2 focalperzz = focal_legth_perZ * clamp(ViewposPerZ, -TanHalfFov, TanHalfFov);
 
-    matrix J = matrix(
-	 focal_legth_perZ.x, 0.f, -focalperzz.x, 0.f,
-	 0.f, -focal_legth_perZ.x, focalperzz.y, 0.f,
-	 0.f, 0.f, 0.f, 0.f,
-	 0.f, 0.f, 0.f, 0.f
-    
+	float3x3 J = float3x3(
+	    focal_legth_perZ.x, 0.f, 0.0f,
+	    0.f, -focal_legth_perZ.x, 0.0f,
+	    -focalperzz.x, focalperzz.y, 0.f
 	);
+	*/
 
-    matrix a = mul(mul(mul(J, InvViewMatrix), RotationMatrix), ScaleMatrix);
-    matrix A = mul(a, transpose(a));
+	float tzSq = ViewPosition.z * ViewPosition.z;
+	float jsx = -(ViewToClip[0][0] * ViewSize.x) / (2 * ViewPosition.z);
+	float jsy = -(ViewToClip[1][1] * ViewSize.y) / (2 * ViewPosition.z);
+	float jtx = (ViewToClip[0][0] * ViewPosition.x * ViewSize.x) / (2 * tzSq);
+	float jty = (ViewToClip[1][1] * ViewPosition.y * ViewSize.y) / (2 * tzSq);
 
-    float X = A[0][0] + 0.3;
-    float Y = A[1][1] + 0.3;
-    float covariance = A[0][1];
+	float3x3 J = float3x3(jsx, 0.0f, jtx,
+                          0.0f, jsy, jty,
+                          0.0f, 0.0f, 0.0f);
+
+	float3x3 m = mul(RotationMatrix, ScaleMatrix);
+	float3x3 cov3d = mul(m, transpose(m));
+
+	float3x3 JW = mul((float3x3) ViewMatrix, J);
+	float3x3 A = mul(transpose(JW), mul(cov3d, JW));
+
+	A[0][0] += 0.3;
+	A[1][1] += 0.3;
+    float X = A[0][0];
+	float Y = A[1][1];
+    float covariance = A[1][0];
 
     float3 Covariance2D = float3(X, covariance, Y);
     float det = X * Y - covariance * covariance;
     float3 Conic = Covariance2D / det;
+
+	// TODO: This is a hacky hack that fixes things at the moment
+	Conic.xz = Conic.zx;
+	//float2x2 ConicMatrix = InverseMat2((float2x2) A);
+	//float3 Conic = float3(ConicMatrix[0][0], ConicMatrix[0][1], ConicMatrix[1][1]);
     
-    //float delta = length(float2((X - Y), (2 * Covxy)));
-	
     float mid = (X + Y);
 
-    //float lambda1 = mid + sqrt(mid * mid - det);
-    //float lambda2 = mid - sqrt(mid * mid - det);
-
-    float delta = length(float2((X - Y), (2 * covariance)));
+	float delta = length(float2((X - Y), (2 * covariance)));
 	
     float lambda1 = 0.5 * (mid + delta);
     float lambda2 = 0.5 * (mid - delta);
 
     if (lambda2 < 0.0)
+    {
         return;
+    }
 
-    float2 diagonalVector = normalize(float2(1, (-X + covariance + lambda1) / (covariance - Y + lambda1)));
+	float2 diagonalVector = normalize(float2((covariance - Y + lambda1), (-X + covariance + lambda1)));
     float2 majorAxis = min(3 * sqrt(lambda1), 1024.0) * diagonalVector;
     float2 minorAxis = min(3 * sqrt(lambda2), 1024.0) * float2(diagonalVector.y, -diagonalVector.x);
 	
@@ -223,22 +243,6 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
     OutGaussianIDX[idx] = idx;
     OutColorOpacity[idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz * 0.282095 + 0.5; // can be baked into the import
     OutColorOpacity[idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
-
-    
-	//calculates the rotation from the covariancve matrix
-	//float mid = (covariance2d.x + covariance2d.z) * 0.5;
-	//float EL1 = mid + sqrt(max(mid * mid - det, 0.1));
-	//float EL2 = mid - sqrt(max(mid * mid - det, 0.1));
-
-	//float Rotation = 360 * atan2(EL1 - covariance2d.x, covariance2d.y) / (2 * PI);
-
-	//float2 lambda = float2(EL1, EL2);
-	//lambda = sqrt(max(lambda, 0.1));
-
-	//float2 SpriteSizeWS = lambda * viewZ * max(TanHalfFov.x, TanHalfFov.y);
-	
-
-
 }
 
 Buffer<float2> VS_SSPositions;
@@ -293,7 +297,7 @@ OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint Instance
     float2 vertex = Quad[GlobalVertexId];
 
 	output.Mean = float2((float2(sspos.x, -sspos.y) + 1) * 0.5 * PrimaryView.ViewSizeAndInvSize.xy);
-    output.Position = float4(sspos.xy + (vertex.x * quadscale.xy + vertex.y * quadscale.zw), 0, 1);
+    output.Position = float4(sspos.xy + (vertex.x * quadscale.zw + vertex.y * quadscale.xy), 0, 1);
     //output.Position = float4(sspos.xy + (vertex.x * float2(1, 1) + vertex.y * float2(-1,-1)), 0, 1);
 
     //output.Position = float4(sspos.xy + vertex.xy * 0.01, 0, 1);
@@ -324,7 +328,8 @@ float4 GSSplatting_PS(in OutVertex input) : SV_TARGET
 	//return float4(g, 0, 0, 1);
     //return float4(1,1,1, 1) * g;
 
-	return float4 (input.Color, input.Opacity) * g;
+	return float4(input.Color, input.Opacity) * g;
+	//return float4(input.UVCoord, 0, 1);
     //
     //gPosition = vec4(out_wsPos, 1.0) * g;
     //gNormal = vec4(out_normal, out_opacity) * g;
