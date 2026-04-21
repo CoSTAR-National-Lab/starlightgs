@@ -6,23 +6,6 @@
 #include "/Engine/Generated/GeneratedUniformBuffers.ush"
 
 
-//SCREEN_PASS_TEXTURE_VIEWPORT(Viewpor)
-
-//-----------TESTING
-
-//RWTexture2D<float4> Output;
-//float4 Colour;
-
-//[numthreads(8, 8, 1)]
-//void MainCS(
-//	uint3 DispatchThreadId : SV_DispatchThreadID,
-//	uint GroupIndex : SV_GroupIndex )
-//{
-//    Output[DispatchThreadId.xy] = Colour;
-//}
-
-//-----------
-
 // Check isnan(value) before use.
 uint order_preserving_float_map(float value)
 {
@@ -53,53 +36,20 @@ RWBuffer<float> OutDepth;
 RWBuffer<uint> OutGaussianIDX;
 
 
-#define TILE_SIZE_X 16
-#define TILE_SIZE_Y 16
-#define TILE_SIZE TILE_SIZE_X*TILE_SIZE_Y
-
 float3x3 VecToScaleMatrix(in float3 Scale)
 {
-	float3x3 OutMatrix;
-
-    OutMatrix[0][0] = Scale.x;
-    OutMatrix[1][1] = Scale.y;
-    OutMatrix[2][2] = Scale.z;
-
-    OutMatrix[1][0] = 0.0f;
-    OutMatrix[2][0] = 0.0f;
-
-    OutMatrix[0][1] = 0.0f;
-    OutMatrix[2][1] = 0.0f;
-
-    OutMatrix[0][2] = 0.0f;
-    OutMatrix[1][2] = 0.0f;
-
-    return OutMatrix;
+	return float3x3(
+		Scale.x, 0.0f, 0.0f,
+		0.0f, Scale.y, 0.0f,
+		0.0f, 0.0f, Scale.z
+	);
 }
 
 
-float2x2 InverseMat2(float2x2 m)
-{
-	float det = m[0][0] * m[1][1] - m[0][1] * m[1][0];
-	float2x2 inv;
-
-	if (det != 0)
-	{
-		inv[0][0] =  m[1][1] / det;
-		inv[0][1] = -m[0][1] / det;
-		inv[1][0] = -m[1][0] / det;
-		inv[1][1] =  m[0][0] / det;
-	}
-	else
-		inv = 0.0f;
-
-	return inv;
-}
-
-//Mixed Rendering Pipeline
-//1. GSPrepass // most from niagara script
-//2. Sort by view depth
-//3. SplatRasterization (VS+PS) - Renders each splat as a billboard, writing out the depth and color of each splat to the GBuffer
+// Mixed Rendering Pipeline
+// 1. GSPrepass
+// 2. Sort by view depth
+// 3. SplatRasterization (VS+PS) - Renders each splat as a billboard, writing out the depth and color of each splat to the GBuffer
 
 [numthreads(256,1,1)]
 void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : SV_GroupIndex)
@@ -112,19 +62,15 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
         //uint32 StartVertexLocation;
         //uint32 StartInstanceLocation;
 
-        Counter[0] = 6; // 6 vertices for a quad in a trilist
+        Counter[0] = 6; // 6 vertices for a quad in a triangle list
     }
 
 	//Terminate if we are outside the bounds of our input data
     if (DispatchThreadId.x >= GSResources.SplatCount)
 		return;
 
-    //ViewState ResolvedView = ResolveView();
     float4x4 ViewMatrix = PrimaryView.TranslatedWorldToView;
-    float4x4 InvViewMatrix = PrimaryView.ViewToTranslatedWorld;
     float4x4 ViewToClip = PrimaryView.ViewToClip;
-    float4x4 ClipToView = PrimaryView.ClipToView;
-
     float2 ViewSize = PrimaryView.ViewSizeAndInvSize.xy;
 
     float3 Position = GSResources.Positions[DispatchThreadId.x];
@@ -135,114 +81,96 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
     TranslatedPosition.xyz *= 0.01f;
 
     float4 ViewPosition = mul(TranslatedPosition, ViewMatrix);
+	float4 ClipPosition = mul(ViewPosition, ViewToClip);
 
-	float4 ClipPosition = mul(TranslatedPosition, mul(ViewMatrix, ViewToClip));
-
-    //cull depending on how far outside the screen we are
+    // TODO: Clipping should depend on size of splat
     float clip = 1.05 * ClipPosition.w; //Need to see how conservative that
-
     if (ClipPosition.z < -clip || ClipPosition.x < -clip || ClipPosition.x > clip || ClipPosition.y < -clip || ClipPosition.y > clip)
     {
         return;
     }
 	
-	//perspective divide to get NDC space
+	// Perspective divide to get NDC space
     ClipPosition.xyz = ClipPosition.xyz / ClipPosition.w;
 
-	float3 Scale = GSResources.Scales[DispatchThreadId.x];
-	float4 Rot = GSResources.Orientations[DispatchThreadId.x];
-
-	float3x3 ScaleMatrix = VecToScaleMatrix(Scale * 2.f);
-	float3x3 RotationMatrix = QuatToMatrix(Rot);
+	float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[DispatchThreadId.x]);
+	float3x3 RotationMatrix = QuatToMatrix(GSResources.Orientations[DispatchThreadId.x]);
 
 	RotationMatrix = mul((float3x3) Primitive.RelativeWorldToLocal, RotationMatrix);
 
-    /*
-    float2 TanHalfFov = float2(ClipToView[0][0], ClipToView[1][1]);
+    // Calculate covariance matrix
+	float3x3 T = mul(RotationMatrix, ScaleMatrix);
+	float3x3 Covariance3D = mul(T, transpose(T));
 
-    float2 focalL = (ViewSize * 0.5) / TanHalfFov;
+    // Calculate Jacobian matrix based off of projection matrix
+	// Based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
+	float FocalZ = ViewSize.y / (2.0f * View.TanAndInvTanHalfFOV.y);
 
-    float ViewZ = ViewPosition.z / ViewPosition.w;
+	float LimX = 1.3 * View.TanAndInvTanHalfFOV.x;
+	float LimY = 1.3 * View.TanAndInvTanHalfFOV.y;
 
-    float2 focal_legth_perZ = focalL / ViewZ;
+	float TxTz = ViewPosition.x / ViewPosition.z;
+	float TyTz = ViewPosition.y / ViewPosition.z;
 
-    float2 ViewposPerZ = ViewPosition.xy / ViewPosition.z;
-
-    float2 focalperzz = focal_legth_perZ * clamp(ViewposPerZ, -TanHalfFov, TanHalfFov);
+	// Clamped versions of TxTz and TyTz 
+	float Tx = min(LimX, max(-LimX, TxTz)) * ViewPosition.z;
+	float TY = min(LimY, max(-LimY, TyTz)) * ViewPosition.z;
 
 	float3x3 J = float3x3(
-	    focal_legth_perZ.x, 0.f, 0.0f,
-	    0.f, -focal_legth_perZ.x, 0.0f,
-	    -focalperzz.x, focalperzz.y, 0.f
+        FocalZ / ViewPosition.z,    0.0f,                       -(FocalZ * Tx) / (ViewPosition.z * ViewPosition.z),
+        0.0f,                       FocalZ / ViewPosition.z,    -(FocalZ * TY) / (ViewPosition.z * ViewPosition.z),
+		0.0f,                       0.0f,                       0.0f
 	);
-	*/
 
-	float tzSq = ViewPosition.z * ViewPosition.z;
-	float jsx = -(ViewToClip[0][0] * ViewSize.x) / (2 * ViewPosition.z);
-	float jsy = -(ViewToClip[1][1] * ViewSize.y) / (2 * ViewPosition.z);
-	float jtx = (ViewToClip[0][0] * ViewPosition.x * ViewSize.x) / (2 * tzSq);
-	float jty = (ViewToClip[1][1] * ViewPosition.y * ViewSize.y) / (2 * tzSq);
+	float3x3 JW = mul(J, transpose((float3x3) ViewMatrix));
+	float3x3 Covariance2D = mul(JW, mul(transpose(Covariance3D), transpose(JW)));
 
-	float3x3 J = float3x3(jsx, 0.0f, jtx,
-                          0.0f, jsy, jty,
-                          0.0f, 0.0f, 0.0f);
+	float X = Covariance2D[0][0] + 0.3f;
+	float Y = Covariance2D[1][1] + 0.3f;
+	float Covariance = Covariance2D[0][1];
 
-	float3x3 m = mul(RotationMatrix, ScaleMatrix);
-	float3x3 cov3d = mul(m, transpose(m));
+    // Determine conic for the splat
+	float Determinant = X * Y - Covariance * Covariance;
+	float3 Conic = float3(Y, Covariance, X) / Determinant;
 
-	float3x3 JW = mul((float3x3) ViewMatrix, J);
-	float3x3 A = mul(transpose(JW), mul(cov3d, JW));
-
-	A[0][0] += 0.3;
-	A[1][1] += 0.3;
-    float X = A[0][0];
-	float Y = A[1][1];
-    float covariance = A[1][0];
-
-    float3 Covariance2D = float3(X, covariance, Y);
-    float det = X * Y - covariance * covariance;
-    float3 Conic = Covariance2D / det;
-
-	// TODO: This is a hacky hack that fixes things at the moment
-	Conic.xz = Conic.zx;
-	//float2x2 ConicMatrix = InverseMat2((float2x2) A);
-	//float3 Conic = float3(ConicMatrix[0][0], ConicMatrix[0][1], ConicMatrix[1][1]);
-    
-    float mid = (X + Y);
-
-	float delta = length(float2((X - Y), (2 * covariance)));
+    // Finally calculate the bounds of a screenspace quad that will be rasterized for this splat
+	float Mid = (X + Y);
+	float Delta = length(float2((X - Y), (2 * Covariance)));
 	
-    float lambda1 = 0.5 * (mid + delta);
-    float lambda2 = 0.5 * (mid - delta);
+    float Lambda1 = 0.5f * (Mid + Delta);
+    float Lambda2 = 0.5f * (Mid - Delta);
 
-    if (lambda2 < 0.0)
+    if (Lambda2 < 0.0f)
     {
         return;
     }
 
-	float2 diagonalVector = normalize(float2((covariance - Y + lambda1), (-X + covariance + lambda1)));
-    float2 majorAxis = min(3 * sqrt(lambda1), 1024.0) * diagonalVector;
-    float2 minorAxis = min(3 * sqrt(lambda2), 1024.0) * float2(diagonalVector.y, -diagonalVector.x);
+	float2 DiagonalVector = normalize(float2((Covariance - Y + Lambda1), (-X + Covariance + Lambda1)));
+    float2 MajorAxis = min(3 * sqrt(Lambda1), 1024.0f) * DiagonalVector;
+    float2 MinorAxis = min(3 * sqrt(Lambda2), 1024.0f) * float2(DiagonalVector.y, -DiagonalVector.x);
 	
-    float2 majorAxisMultiplier = majorAxis / (ViewSize * 0.5);
-    float2 minorAxisMultiplier = minorAxis / (ViewSize * 0.5);
+    float2 MajorAxisMultiplier = MajorAxis / (ViewSize * 0.5f);
+    float2 MinorAxisMultiplier = MinorAxis / (ViewSize * 0.5f);
 
-    //IndirectARGS
+    // Output properties of screenspace quad and projected gaussians
+
+    //Indirect args
     // uint32 VertexCountPerInstance;
     // uint32 InstanceCount;
     // uint32 StartVertexLocation;
     // uint32 StartInstanceLocation;
-    uint idx = 0;
-    InterlockedAdd(Counter[1], 1, idx);
+    uint Idx = 0;
+    InterlockedAdd(Counter[1], 1, Idx);
 
-    OutSSPositions[idx] = ClipPosition.xy;
-    OutSSScale[idx] = float4(majorAxisMultiplier, minorAxisMultiplier);
-    OutConic[idx] = Conic;
+    OutSSPositions[Idx] = ClipPosition.xy;
+	OutSSScale[Idx] = 0.0f;
+	OutSSScale[Idx] = float4(MajorAxisMultiplier, MinorAxisMultiplier);
+    OutConic[Idx] = Conic;
     
-    OutDepth[idx] = ~order_preserving_float_map(ViewPosition.z);
-    OutGaussianIDX[idx] = idx;
-    OutColorOpacity[idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz * 0.282095 + 0.5; // can be baked into the import
-    OutColorOpacity[idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
+    OutDepth[Idx] = ~order_preserving_float_map(ViewPosition.z);
+    OutGaussianIDX[Idx] = Idx;
+    OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz * 0.282095 + 0.5; // can be baked into the import
+    OutColorOpacity[Idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
 }
 
 Buffer<float2> VS_SSPositions;
@@ -284,30 +212,20 @@ OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint Instance
     uint index = VS_GaussianIDX[InstanceID];
 
     OutVertex output;
-    output.Color = VS_ColorOpacity[index].rgb * VS_ColorOpacity[index].a;
+    output.Color = VS_ColorOpacity[index].rgb;
     output.Opacity = VS_ColorOpacity[index].a;
 
     float3 Conic = VS_Conic[index];
-
 	output.Conic = float3(-0.5 * Conic.x, -Conic.y, -0.5 * Conic.z);
+
     output.UVCoord = (Quad[GlobalVertexId] + 1) * 0.5;
 
-    float4 quadscale = VS_SSScale[index];
-    float2 sspos = VS_SSPositions[index];
-    float2 vertex = Quad[GlobalVertexId];
+    float4 QuadScale = VS_SSScale[index];
+    float2 ScreenSpacePos = VS_SSPositions[index];
+    float2 Vertex = Quad[GlobalVertexId];
 
-	output.Mean = float2((float2(sspos.x, -sspos.y) + 1) * 0.5 * PrimaryView.ViewSizeAndInvSize.xy);
-    output.Position = float4(sspos.xy + (vertex.x * quadscale.zw + vertex.y * quadscale.xy), 0, 1);
-    //output.Position = float4(sspos.xy + (vertex.x * float2(1, 1) + vertex.y * float2(-1,-1)), 0, 1);
-
-    //output.Position = float4(sspos.xy + vertex.xy * 0.01, 0, 1);
-
-    //output.Color = float3(1, 1, 1);
-    //output.Opacity = 1;
-    //output.Conic = float3(1, 1, 1);
-    //output.UVCoord = float2(1, 1);
-
-   // output.Position = float4(vertex.xy, 0, 1);
+	output.Mean = float2((float2(ScreenSpacePos.x, -ScreenSpacePos.y) + 1) * 0.5 * PrimaryView.ViewSizeAndInvSize.xy);
+    output.Position = float4(ScreenSpacePos.xy + (Vertex.x * QuadScale.zw + Vertex.y * QuadScale.xy), 0, 1);
 
     return output;
 }
@@ -316,19 +234,13 @@ OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint Instance
  
 float4 GSSplatting_PS(in OutVertex input) : SV_TARGET
 {
-    float2 d = (input.Mean.xy - input.Position.xy);
-    float alpha = dot(input.Conic.xzy, float3(d * d, d.x * d.y));
-    float g = exp(alpha);
-    //
-    //if (u_renderMode == 4)
+    float2 DistanceFromMean = (input.Mean.xy - input.Position.xy);
 
-    //    gAlbedo = vec4(.01, .005, 0, .01);
-    //else
+    float Power = dot(input.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
+    float Alpha = exp(Power);
 
-	//return float4(g, 0, 0, 1);
-    //return float4(1,1,1, 1) * g;
+	return float4(input.Color, input.Opacity) * Alpha;
 
-	return float4(input.Color, input.Opacity) * g;
 	//return float4(input.UVCoord, 0, 1);
     //
     //gPosition = vec4(out_wsPos, 1.0) * g;

@@ -152,6 +152,38 @@ FVector3f SwizzleVectorAbs(float InX, float InY, float InZ, const TStaticArray<E
 	};
 }
 
+FVector3f UnitVectorForAxis(EGSplatSwizzleAxis Axis)
+{
+	switch (Axis)
+	{
+	case EGSplatSwizzleAxis::X:	 return  FVector3f::UnitX();
+	case EGSplatSwizzleAxis::Y:	 return  FVector3f::UnitY();
+	case EGSplatSwizzleAxis::Z:	 return  FVector3f::UnitZ();
+	case EGSplatSwizzleAxis::Xn: return -FVector3f::UnitX();
+	case EGSplatSwizzleAxis::Yn: return -FVector3f::UnitY();
+	case EGSplatSwizzleAxis::Zn: return -FVector3f::UnitZ();
+	default:
+		checkNoEntry();
+	}
+	return FVector3f::ZeroVector;
+}
+
+FVector4f SwizzleQuaternion(float InX, float InY, float InZ, float InW, const TStaticArray<EGSplatSwizzleAxis, 3>& Swizzle)
+{
+	FVector3f XAxis = UnitVectorForAxis(Swizzle[0]);
+	FVector3f YAxis = UnitVectorForAxis(Swizzle[1]);
+	FVector3f ZAxis = UnitVectorForAxis(Swizzle[2]);
+	FVector3f XCrossY = XAxis ^ YAxis;
+	bool bRightHanded = (XCrossY | ZAxis) > 0;
+
+	return FVector4f{
+		SwizzleComponent(InX, InY, InZ, Swizzle[0]),
+		SwizzleComponent(InX, InY, InZ, Swizzle[1]),
+		SwizzleComponent(InX, InY, InZ, Swizzle[2]),
+		bRightHanded ? -InW : InW
+	};
+}
+
 bool FGSplatImportData::ImportPly(const FGSplatImportData& ImportData, FGaussianSplatData& Splats)
 {
 	if (!ImportData.PlyData || !ImportData.PlyData->hasElement("vertex"))
@@ -312,11 +344,11 @@ bool FGSplatImportData::ImportPly(const FGSplatImportData& ImportData, FGaussian
 			ImportData.Swizzle);
 
 
-		FVector3f SwizzledRot = SwizzleVector(rot1[i], rot2[i], rot3[i], ImportData.Swizzle);
+		FVector4f SwizzledRot = SwizzleQuaternion(rot1[i], rot2[i], rot3[i], rot0[i], ImportData.Swizzle);
 		orientations[i].X = SwizzledRot.X;
 		orientations[i].Y = SwizzledRot.Y;
 		orientations[i].Z = SwizzledRot.Z;
-		orientations[i].W = rot0[i];
+		orientations[i].W = SwizzledRot.W;
 		orientations[i].Normalize();
 
 		if (Splats.bHasNormals)
