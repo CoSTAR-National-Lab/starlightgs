@@ -53,102 +53,63 @@ END_SHADER_PARAMETER_STRUCT()
 
 void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FPostProcessingInputs& Inputs)
 {
+	// Don't call this when there are no proxies
+	// TODO: Maybe relax this contract since it doesn't directly access proxy data? But still effectively no-ops if there are no proxies
+	check(!Proxies.IsEmpty());
 
-	if (Proxies.Num())
-	{
-		for (auto Proxy : Proxies)
+	auto PassParameters = GraphBuilder.AllocParameters<FSplattingPassPipelineParameters>();
+
+	PassParameters->VertexShader.View = InView.ViewUniformBuffer;
+	PassParameters->VertexShader.VS_SSPositions = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutNDCPositionsBuffer")], PF_G32R32F);
+	PassParameters->VertexShader.VS_SSScale = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutNDCScalesBuffer")], PF_A32B32G32R32F);
+	PassParameters->VertexShader.VS_Conic = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutConic")]);
+	PassParameters->VertexShader.VS_ColorOpacity = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutColorOpacity")], PF_A32B32G32R32F);
+	PassParameters->VertexShader.VS_GaussianIDX = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutGaussianIDX")], PF_R32_UINT);
+	PassParameters->VertexShader.VS_Depth = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutDepth")], PF_R32_UINT);	
+
+	PassParameters->PixelShader.IndirectArgs = TransientBuffers[TEXT("CounterBuffer")];
+	PassParameters->PixelShader.RenderTargets[0] = FRenderTargetBinding(Inputs.SceneTextures->GetContents()->SceneColorTexture, ERenderTargetLoadAction::ELoad, 0);
+
+	// 5. Get Shader maps and shaders
+	const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());
+
+	TShaderMapRef<FSplattingPassVS> VertexShader(ShaderMap);
+	TShaderMapRef<FSplattingPassPS> PixelShader(ShaderMap);
+
+	// 6. Add the pass
+	GraphBuilder.AddPass(
+		RDG_EVENT_NAME("GSRasterizePass"),
+		PassParameters,
+		ERDGPassFlags::Raster,
+		[PassParameters, VertexShader, PixelShader](FRHICommandList& RHICmdList)
 		{
-			auto PassParameters = GraphBuilder.AllocParameters<FSplattingPassPipelineParameters>();
+			// Initialize the Pipeline State
+			FGraphicsPipelineStateInitializer GraphicsPSOInit;
+			RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
 
-			PassParameters->VertexShader.View = InView.ViewUniformBuffer;
-			PassParameters->VertexShader.VS_SSPositions = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutNDCPositionsBuffer")], PF_G32R32F);
-			PassParameters->VertexShader.VS_SSScale = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutNDCScalesBuffer")], PF_A32B32G32R32F);
-			PassParameters->VertexShader.VS_Conic = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutConic")]);
-			PassParameters->VertexShader.VS_ColorOpacity = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutColorOpacity")], PF_A32B32G32R32F);
-			PassParameters->VertexShader.VS_GaussianIDX = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutGaussianIDX")], PF_R32_UINT);
-			PassParameters->VertexShader.VS_Depth = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutDepth")], PF_R32_UINT);	
+			// Set up blend/depth/rasterizer states
+			GraphicsPSOInit.BlendState = TStaticBlendState<CW_RGBA,BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_One>::GetRHI();
+			GraphicsPSOInit.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
+			GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
 
-			PassParameters->PixelShader.IndirectArgs = TransientBuffers[TEXT("CounterBuffer")];
-			PassParameters->PixelShader.RenderTargets[0] = FRenderTargetBinding(Inputs.SceneTextures->GetContents()->SceneColorTexture, ERenderTargetLoadAction::ELoad, 0);
+			// Set shaders
+			GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI = GEmptyVertexDeclaration.VertexDeclarationRHI; //using SV_VertexID
+			GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
+			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = PixelShader.GetPixelShader();
+			GraphicsPSOInit.PrimitiveType = PT_TriangleList;
 
-			// 5. Get Shader maps and shaders
-			const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());
+			SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit, 0);
 
-			TShaderMapRef<FSplattingPassVS> VertexShader(ShaderMap);
-			TShaderMapRef<FSplattingPassPS> PixelShader(ShaderMap);
+			// Set shader parameters
+			SetShaderParameters(RHICmdList, VertexShader, VertexShader.GetVertexShader(), PassParameters->VertexShader);
+			SetShaderParameters(RHICmdList, PixelShader, PixelShader.GetPixelShader(), PassParameters->PixelShader);
 
+			// Execute the Indirect Draw
+			// The RHI needs the actual underlying FRHIBuffer for the indirect call
+			FRHIBuffer* IndirectArgsRHIBuffer = PassParameters->PixelShader.IndirectArgs->GetIndirectRHICallBuffer();
+			uint32 ArgumentOffset = 0; // Offset in bytes if your buffer contains multiple draw args
 
-			// 6. Add the pass
-			GraphBuilder.AddPass(
-				RDG_EVENT_NAME("MyCustomIndirectDrawPass"),
-				PassParameters,
-				ERDGPassFlags::Raster,
-				[PassParameters, VertexShader, PixelShader](FRHICommandList& RHICmdList)
-				{
-					// Initialize the Pipeline State
-					FGraphicsPipelineStateInitializer GraphicsPSOInit;
-					RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
-
-					// Set up blend/depth/rasterizer states
-					GraphicsPSOInit.BlendState = TStaticBlendState<CW_RGBA,BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_One>::GetRHI();
-					GraphicsPSOInit.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
-					GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
-
-					// Set shaders
-					GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI = GEmptyVertexDeclaration.VertexDeclarationRHI; //using SV_VertexID
-					GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
-					GraphicsPSOInit.BoundShaderState.PixelShaderRHI = PixelShader.GetPixelShader();
-					GraphicsPSOInit.PrimitiveType = PT_TriangleList;
-
-					SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit, 0);
-
-					// Set shader parameters
-					SetShaderParameters(RHICmdList, VertexShader, VertexShader.GetVertexShader(), PassParameters->VertexShader);
-					SetShaderParameters(RHICmdList, PixelShader, PixelShader.GetPixelShader(), PassParameters->PixelShader);
-
-					// Execute the Indirect Draw
-					// The RHI needs the actual underlying FRHIBuffer for the indirect call
-					FRHIBuffer* IndirectArgsRHIBuffer = PassParameters->PixelShader.IndirectArgs->GetIndirectRHICallBuffer();
-					uint32 ArgumentOffset = 0; // Offset in bytes if your buffer contains multiple draw args
-
-					RHICmdList.DrawPrimitiveIndirect(IndirectArgsRHIBuffer, ArgumentOffset);
-				}
-			);
-
-			//FullScreen
-
-			//FS SceneTextures = GetSceneTextureParameters(GraphBuilder, InView)
-
-			//auto& sceneDesc = Inputs.SceneTextures->GetContents()->SceneColorTexture->Desc;
-			//auto RDGTexture = GraphBuilder.CreateTexture(sceneDesc, TEXT("ComputeOutputTexture"));
-			//
-			//FRDGTextureRef SceneTexture = Inputs.SceneTextures->GetContents()->SceneColorTexture;
-			//
-			//auto uav = GraphBuilder.CreateUAV(RDGTexture);
-			//
-			//const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());
-			
-			//TShaderMapRef<FGSCompute> ComputeShader(ShaderMap);
-			
-			//auto dispatchsize = sceneDesc.GetSize() / 8;
-			//dispatchsize.Z = 1;
-			
-			//AddClearUAVPass(GraphBuilder, uav, 0.f);
-			
-			//FGSCompute::FParameters* PassParameters = GraphBuilder.AllocParameters<FGSCompute::FParameters>();
-			//PassParameters->Colour = FVector4f(1, 1, 0, 1);
-			//PassParameters->Output = uav;
-			
-			//FComputeShaderUtils::AddPass(
-			//		GraphBuilder,
-			//		RDG_EVENT_NAME("MyCustomComputePass"),
-			//		ComputeShader,
-			//		PassParameters,
-			//		dispatchsize
-			//	);
-			
-			//AddCopyTexturePass(GraphBuilder, RDGTexture, SceneTexture);
-			break;
+			RHICmdList.DrawPrimitiveIndirect(IndirectArgsRHIBuffer, ArgumentOffset);
 		}
-	}
+	);
 }

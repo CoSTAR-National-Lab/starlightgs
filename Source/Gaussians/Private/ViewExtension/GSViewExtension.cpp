@@ -40,6 +40,11 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& InView,
 	const FPostProcessingInputs& Inputs)
 {
+	if (Proxies.IsEmpty())
+	{
+		return;
+	}
+
 	GSPrePass(GraphBuilder, InView, Inputs);
 	GSSplattingPass(GraphBuilder, InView, Inputs);
 }
