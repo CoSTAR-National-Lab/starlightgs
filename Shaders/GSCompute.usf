@@ -170,7 +170,8 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
     
     OutDepth[Idx] = ~order_preserving_float_map(ViewPosition.z);
     OutGaussianIDX[Idx] = Idx;
-    OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz * 0.282095 + 0.5; // can be baked into the import
+    //OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz * 0.282095 + 0.5; //if color is stored in SH0 it need to be converted first we do it on import step
+    OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz; 
     OutColorOpacity[Idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
 }
 
@@ -238,9 +239,10 @@ float4 GSSplatting_PS(in OutVertex input) : SV_TARGET
     float2 DistanceFromMean = (input.Mean.xy - input.Position.xy);
 
     float Power = dot(input.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
-    float Alpha = exp(Power);
+    float Alpha = exp(Power) * input.Opacity;
 
-	return float4(input.Color, input.Opacity) * Alpha;
+    //return premultiplied opacity
+    return float4(input.Color * Alpha,Alpha);
 
 	//return float4(input.UVCoord, 0, 1);
     //

@@ -311,21 +311,24 @@ bool FGSplatImportData::ImportPly(const FGSplatImportData& ImportData, FGaussian
 
 		if (bHasZeroOrderSH)
 		{
-			sho[i].X = dc_x[i];
-			sho[i].Y = dc_y[i];
-			sho[i].Z = dc_z[i];
+			// * 0.282095 + 0.5 to RGB
+
+			sho[i].X = dc_x[i]	* 0.28209479177387814f + 0.5;
+			sho[i].Y = dc_y[i]	* 0.28209479177387814f + 0.5;
+			sho[i].Z = dc_z[i]	* 0.28209479177387814f + 0.5;
 		}
 		else
 		{
-			auto UCharToSH = [](uint8_t x)
+			auto UCharToFloat = [](uint8_t x)
 				{
 					// Convert to normalized float
 					float f = static_cast<float>(x) / 255.0f;
-					return (f - 0.5f) / 0.28209479177387814f;
+					//return (f - 0.5f) / 0.28209479177387814f;
+					return f;
 				};
-			sho[i].X = UCharToSH(red[i]);
-			sho[i].Y = UCharToSH(green[i]);
-			sho[i].Z = UCharToSH(blue[i]);
+			sho[i].X = UCharToFloat(red[i]);
+			sho[i].Y = UCharToFloat(green[i]);
+			sho[i].Z = UCharToFloat(blue[i]);
 		}
 
 		if (bCompressedOpacity)
