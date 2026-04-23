@@ -32,6 +32,9 @@ RWBuffer<float4> OutColorOpacity;
 RWBuffer<float> OutDepth;
 RWBuffer<uint> OutGaussianIDX;
 
+// Capacity of buffers holding gaussian properties
+uint BufferCapacity;
+
 
 float3x3 VecToScaleMatrix(in float3 Scale)
 {
@@ -162,17 +165,23 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
     // uint32 StartInstanceLocation;
     uint Idx = 0;
     InterlockedAdd(Counter[1], 1, Idx);
-
-    OutSSPositions[Idx] = ClipPosition.xy;
-	OutSSScale[Idx] = 0.0f;
-	OutSSScale[Idx] = float4(MajorAxisMultiplier, MinorAxisMultiplier);
-    OutConic[Idx] = Conic;
-    
-    OutDepth[Idx] = ~order_preserving_float_map(ViewPosition.z);
-    OutGaussianIDX[Idx] = Idx;
-    //OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz * 0.282095 + 0.5; //if color is stored in SH0 it need to be converted first we do it on import step
-    OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz; 
-    OutColorOpacity[Idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
+    if (Idx < BufferCapacity)
+    {
+        OutSSPositions[Idx] = ClipPosition.xy;
+	    OutSSScale[Idx] = 0.0f;
+	    OutSSScale[Idx] = float4(MajorAxisMultiplier, MinorAxisMultiplier);
+        OutConic[Idx] = Conic;
+        
+        OutDepth[Idx] = ~order_preserving_float_map(ViewPosition.z);
+        OutGaussianIDX[Idx] = Idx;
+        OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz; 
+        OutColorOpacity[Idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
+    }
+	else
+	{
+		uint Dummy;
+		InterlockedExchange(Counter[1], BufferCapacity, Dummy);
+	}
 }
 
 Buffer<float2> VS_SSPositions;

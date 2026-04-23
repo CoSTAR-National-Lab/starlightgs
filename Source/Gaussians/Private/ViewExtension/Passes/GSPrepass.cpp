@@ -48,6 +48,8 @@ class FGSPrepassCS : public FGlobalShader
 
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutDepth)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutGaussianIDX)
+
+		SHADER_PARAMETER(uint32, BufferCapacity)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
@@ -114,6 +116,8 @@ void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& In
 		Parameters->OutColorOpacity = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutColorOpacity")],		 PF_A32B32G32R32F);
 		Parameters->OutGaussianIDX = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutGaussianIDX")],		 PF_R32_UINT);
 		Parameters->OutDepth = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutDepth")],					 PF_R32_UINT);
+
+		Parameters->BufferCapacity = Capacity;
 
 		const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());
 		TShaderMapRef<FGSPrepassCS> ComputeShader(ShaderMap);
