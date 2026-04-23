@@ -31,6 +31,8 @@ public:
 	// Use this to bind GSplatGBuffer as collection of shader parameters for reading
 	FGSplatGBufferParameters GetShaderParameters(FRDGBuilder& GraphBuilder) const;
 
+	FRDGTextureRef GetBaseColorTexture() const { return BaseColorTexture; }
+
 private:
 	FRDGTextureRef BaseColorTexture;
 	FRDGTextureRef NormalTexture;

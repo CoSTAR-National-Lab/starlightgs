@@ -51,7 +51,7 @@ BEGIN_SHADER_PARAMETER_STRUCT(FSplattingPassPipelineParameters, )
 END_SHADER_PARAMETER_STRUCT()
 
 
-void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FPostProcessingInputs& Inputs)
+void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView)
 {
 	// Don't call this when there are no proxies
 	// TODO: Maybe relax this contract since it doesn't directly access proxy data? But still effectively no-ops if there are no proxies
@@ -68,7 +68,7 @@ void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneVi
 	PassParameters->VertexShader.VS_Depth = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutDepth")], PF_R32_UINT);	
 
 	PassParameters->PixelShader.IndirectArgs = TransientBuffers[TEXT("CounterBuffer")];
-	PassParameters->PixelShader.RenderTargets[0] = FRenderTargetBinding(Inputs.SceneTextures->GetContents()->SceneColorTexture, ERenderTargetLoadAction::ELoad, 0);
+	PassParameters->PixelShader.RenderTargets[0] = FRenderTargetBinding(GSplatGBuffer.GetBaseColorTexture(), ERenderTargetLoadAction::ELoad, 0);
 
 	// 5. Get Shader maps and shaders
 	const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());

@@ -30,8 +30,8 @@ public:
 
 private:
 	//Rasterization Pipeline // rendering into scene texture to begin with as a post process. later can do 
-	void GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FPostProcessingInputs& Inputs);
-	void GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FPostProcessingInputs& Inputs);
+	void GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& InView);
+	void GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView);
 
 	// Composite splat buffer with GBuffer
 	void GSCompositionPass(FRDGBuilder& GraphBuilder, const FSceneView& InView);

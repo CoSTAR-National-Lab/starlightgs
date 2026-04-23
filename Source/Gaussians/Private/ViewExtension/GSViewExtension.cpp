@@ -2,6 +2,8 @@
 
 #include "GaussianSplatSceneProxy.h"
 #include "GaussianSplatResource.h"
+#include "RenderGraphUtils.h"
+#include "PostProcess/PostProcessInputs.h"
 
 #include "Subsystems/WorldSubsystem.h"
 
@@ -12,6 +14,7 @@ FGSViewExtension::FGSViewExtension(const FAutoRegister& AutoRegister, UWorldSubs
 
 void FGSViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 {
+
 }
 
 void FGSViewExtension::SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView)
@@ -26,15 +29,19 @@ void FGSViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFamily)
 void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView,
 	const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
-	for (auto Proxy : Proxies)
+	if (Proxies.IsEmpty())
 	{
-		FGaussianSplatResource* Resource = Proxy->GetResource_RenderThread();
-
-		TUniformBufferRef<FGaussianSplatShaderResources> ResourceUniformBuffer = TUniformBufferRef<FGaussianSplatShaderResources>{ Resource->GetUniformBuffer() };
-		TUniformBufferRef<FPrimitiveUniformShaderParameters> PrimitiveUniformBuffer = TUniformBufferRef<FPrimitiveUniformShaderParameters>{ Proxy->GetUniformBuffer() };
-
-		// Run projection pre-pass on proxy
+		return;
 	}
+
+	GSplatGBuffer.Init(GraphBuilder, InView);
+
+	GSplatGBuffer.Clear(GraphBuilder);
+	
+
+	GSPrePass(GraphBuilder, InView);
+	GSSplattingPass(GraphBuilder, InView);
+	
 }
 
 void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& InView,
@@ -45,8 +52,8 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 		return;
 	}
 
-	GSPrePass(GraphBuilder, InView, Inputs);
-	GSSplattingPass(GraphBuilder, InView, Inputs);
+	//after splattery copy back to scene 
+	AddCopyTexturePass(GraphBuilder, GSplatGBuffer.GetBaseColorTexture(), Inputs.SceneTextures->GetContents()->SceneColorTexture);
 }
 
 bool FGSViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const

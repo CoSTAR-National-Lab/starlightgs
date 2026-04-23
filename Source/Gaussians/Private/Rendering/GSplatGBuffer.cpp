@@ -22,7 +22,7 @@ void FGSplatGBuffer::Init(FRDGBuilder& GraphBuilder, const FSceneView& InView)
 
 	ETextureCreateFlags Flags = TexCreate_ShaderResource | TexCreate_RenderTargetable;
 	ETextureCreateFlags DepthFlags = TexCreate_ShaderResource | TexCreate_DepthStencilTargetable;
-	BaseColorTexture		 = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_FloatRGB, FClearValueBinding::Black, Flags), TEXT("GSplatGBuffer.BaseColor"));
+	BaseColorTexture		 = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_FloatRGBA, FClearValueBinding::Black, Flags), TEXT("GSplatGBuffer.BaseColor"));
 	NormalTexture			 = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_FloatRGB, FClearValueBinding::Black, Flags), TEXT("GSplatGBuffer.Normal"));
 	MetallicRoughnessTexture = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_R8G8, FClearValueBinding::Black, Flags), TEXT("GSplatGBuffer.MetallicRoughness"));
 	DepthTexture			 = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_DepthStencil, FClearValueBinding::DepthFar, DepthFlags), TEXT("GSplatGBuffer.Depth"));

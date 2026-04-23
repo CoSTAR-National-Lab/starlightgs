@@ -64,7 +64,7 @@ class FGSPrepassCS : public FGlobalShader
 IMPLEMENT_GLOBAL_SHADER(FGSPrepassCS, "/Plugin/Gaussians/GSCompute.usf", "GSPrepass", SF_Compute);
 
 
-void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FPostProcessingInputs& Inputs)
+void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& InView)
 {
 	// Don't call this when there are no proxies
 	check(!Proxies.IsEmpty());
