@@ -13,10 +13,14 @@ class FSplattingPassVS :  public FGlobalShader
 	DECLARE_GLOBAL_SHADER(FSplattingPassVS)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		RDG_BUFFER_ACCESS(IndirectArgs, ERHIAccess::IndirectArgs)
+
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float2>, VS_SSPositions)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float4>, VS_SSScale)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float3>, VS_Conic)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float4>, VS_ColorOpacity)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float2>, VS_MetallicRoughness)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(RWStructuredBuffer<float3>, VS_Normal)
 
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_Depth)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_GaussianIDX)
@@ -35,7 +39,6 @@ class FSplattingPassPS : public FGlobalShader
 	DECLARE_GLOBAL_SHADER(FSplattingPassPS)
 	
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-		RDG_BUFFER_ACCESS(IndirectArgs, ERHIAccess::IndirectArgs)
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -66,9 +69,11 @@ void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneVi
 	PassParameters->VertexShader.VS_ColorOpacity = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutColorOpacity")], PF_A32B32G32R32F);
 	PassParameters->VertexShader.VS_GaussianIDX = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutGaussianIDX")], PF_R32_UINT);
 	PassParameters->VertexShader.VS_Depth = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutDepth")], PF_R32_UINT);	
+	PassParameters->VertexShader.VS_MetallicRoughness = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutMR")], PF_G32R32F);
+	PassParameters->VertexShader.VS_Normal = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutNormal")]);
+	PassParameters->VertexShader.IndirectArgs = TransientBuffers[TEXT("CounterBuffer")];
 
-	PassParameters->PixelShader.IndirectArgs = TransientBuffers[TEXT("CounterBuffer")];
-	PassParameters->PixelShader.RenderTargets[0] = FRenderTargetBinding(GSplatGBuffer.GetBaseColorTexture(), ERenderTargetLoadAction::ELoad, 0);
+	PassParameters->PixelShader.RenderTargets = GSplatGBuffer.GetRenderTargetBindings();
 
 	// 5. Get Shader maps and shaders
 	const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());
@@ -88,7 +93,7 @@ void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneVi
 			RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
 
 			// Set up blend/depth/rasterizer states
-			GraphicsPSOInit.BlendState = TStaticBlendState<CW_RGBA,BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_One, BF_InverseSourceAlpha>::GetRHI();
+			GraphicsPSOInit.BlendState = TStaticBlendState<CW_RGBA,BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, CW_RGB, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, CW_RG, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, CW_RED, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha>::GetRHI();
 			GraphicsPSOInit.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
 			GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
 
@@ -106,7 +111,7 @@ void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneVi
 
 			// Execute the Indirect Draw
 			// The RHI needs the actual underlying FRHIBuffer for the indirect call
-			FRHIBuffer* IndirectArgsRHIBuffer = PassParameters->PixelShader.IndirectArgs->GetIndirectRHICallBuffer();
+			FRHIBuffer* IndirectArgsRHIBuffer = PassParameters->VertexShader.IndirectArgs->GetIndirectRHICallBuffer();
 			uint32 ArgumentOffset = 0; // Offset in bytes if your buffer contains multiple draw args
 
 			RHICmdList.DrawPrimitiveIndirect(IndirectArgsRHIBuffer, ArgumentOffset);

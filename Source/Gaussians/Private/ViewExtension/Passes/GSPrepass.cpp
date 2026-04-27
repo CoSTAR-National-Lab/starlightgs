@@ -45,6 +45,8 @@ class FGSPrepassCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float4>, OutSSScale)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutConic)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float4>, OutColorOpacity)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutNormal)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float2>, OutMR)
 
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutDepth)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutGaussianIDX)
@@ -76,6 +78,8 @@ void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& In
 	auto OutNDCPositionsDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(FVector2f), Capacity);
 	auto OutNDCScalesDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(FVector4f), Capacity);
 	auto OutConicsDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), Capacity);
+	auto OutNormalDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), Capacity);
+	auto OutMRDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(FVector2f), Capacity);
 	auto OutColorOpacityDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(FVector4f), Capacity);
 
 	auto OutGaussianIDXDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity);
@@ -86,6 +90,8 @@ void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& In
 	TransientBuffers.Add(TEXT("OutNDCScalesBuffer"), GraphBuilder.CreateBuffer(OutNDCScalesDesc, TEXT("OutNDCScales")));
 	TransientBuffers.Add(TEXT("OutConic"), GraphBuilder.CreateBuffer(OutConicsDesc, TEXT("OutConics")));
 	TransientBuffers.Add(TEXT("OutColorOpacity"), GraphBuilder.CreateBuffer(OutColorOpacityDesc, TEXT("OutColorOpacity")));
+	TransientBuffers.Add(TEXT("OutNormal"), GraphBuilder.CreateBuffer(OutNormalDesc, TEXT("OutNormal")));
+	TransientBuffers.Add(TEXT("OutMR"), GraphBuilder.CreateBuffer(OutMRDesc, TEXT("OutMR")));
 	TransientBuffers.Add(TEXT("OutGaussianIDX"), GraphBuilder.CreateBuffer(OutGaussianIDXDesc, TEXT("OutGaussianIDX")));
 	TransientBuffers.Add(TEXT("OutDepth"), GraphBuilder.CreateBuffer(OutDepthDesc, TEXT("OutDepth")));
 
@@ -114,6 +120,8 @@ void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& In
 		Parameters->OutSSScale = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutNDCScalesBuffer")],		 PF_A32B32G32R32F);
 		Parameters->OutConic = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutConic")]);
 		Parameters->OutColorOpacity = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutColorOpacity")],		 PF_A32B32G32R32F);
+		Parameters->OutNormal = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutNormal")]);
+		Parameters->OutMR = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutMR")], PF_G32R32F);
 		Parameters->OutGaussianIDX = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutGaussianIDX")],		 PF_R32_UINT);
 		Parameters->OutDepth = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutDepth")],					 PF_R32_UINT);
 

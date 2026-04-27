@@ -14,7 +14,6 @@ FGSViewExtension::FGSViewExtension(const FAutoRegister& AutoRegister, UWorldSubs
 
 void FGSViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 {
-
 }
 
 void FGSViewExtension::SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView)
@@ -36,6 +35,7 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 
 	GSplatGBuffer.Init(GraphBuilder, InView);
 
+	//RenderGraph doesnt recreate the resource every frame, so we need to clear it manually
 	GSplatGBuffer.Clear(GraphBuilder);
 	
 
