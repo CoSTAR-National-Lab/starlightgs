@@ -57,6 +57,9 @@ public:
 	//~ End UObject Interface
 
 
+	UFUNCTION(BlueprintCallable, CallInEditor)
+	void RecalculateBounds();
+
 	//--- GPU Resource Management ---//
 
 	// If the GPU resources have not been created yet,

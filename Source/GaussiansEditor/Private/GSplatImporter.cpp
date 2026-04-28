@@ -398,6 +398,8 @@ bool FGSplatImportData::ImportPly(const FGSplatImportData& ImportData, FGaussian
 
 	Splats.SplatCount = vertices.count;
 
+	Splats.RecalculateBounds();
+
 	return true;
 }
 

@@ -9,7 +9,7 @@
  * Represents parsed data for a single splat, loaded from a regular PLY file.
  */
 USTRUCT()
-struct FGaussianSplatData
+struct GAUSSIANS_API FGaussianSplatData
 {
 	GENERATED_BODY()
 
@@ -72,6 +72,12 @@ struct FGaussianSplatData
 	TArray<FVector2f> MetallicRoughness;
 
 
+protected:
+	// Bounds of all splats in the model. Used for hit proxies, wireframes, culling
+	UPROPERTY(VisibleAnywhere)
+	FBoxSphereBounds3f Bounds;
+
+
 public:
 
 	bool SupportsRelighting() const
@@ -90,58 +96,13 @@ public:
 		Resize(Num);
 	}
 
-	void CopyFrom(const FGaussianSplatData* Other)
-	{
-		SplatCount = Other->SplatCount;
+	void CopyFrom(const FGaussianSplatData* Other);
 
-		Positions = Other->Positions;
-		Orientations = Other->Orientations;
-		Scales = Other->Scales;
-		ZeroOrderHarmonicsCoefficientsAndOpacities = Other->ZeroOrderHarmonicsCoefficientsAndOpacities;
+	void Empty();
+	void Resize(uint32 Num);
 
-		Normals = Other->Normals;
-		HighOrderHarmonicsCoefficients = Other->HighOrderHarmonicsCoefficients;
-		MetallicRoughness = Other->MetallicRoughness;
-	}
-
-	void Empty()
-	{
-		SplatCount = 0;
-
-		Positions									.Empty();
-		Orientations 								.Empty();
-		Scales 										.Empty();
-		ZeroOrderHarmonicsCoefficientsAndOpacities 	.Empty();
-
-		Normals 									.Empty();
-		HighOrderHarmonicsCoefficients 				.Empty();
-		MetallicRoughness.Empty();
-	}
-
-	void Resize(uint32 Num)
-	{
-		SplatCount = Num;
-
-		Positions.Init(FVector4f(0, 0, 0, 0),  SplatCount);
-		Orientations.Init(FQuat4f::Identity,  SplatCount);
-		Scales.Init(FVector4f(0, 0, 0, 0),  SplatCount);
-		ZeroOrderHarmonicsCoefficientsAndOpacities.Init(FVector4f(0, 0, 0, 0), SplatCount);
-
-		if (bHasNormals)
-		{
-			Normals.Init(FVector4f(0, 0, 0, 0),  SplatCount);
-		}
-
-		if (bHasHighOrderSH)
-		{
-			HighOrderHarmonicsCoefficients.Init(0.f, SplatCount * NumHighOrderSH);
-		}
-
-		if (bHasMetallicRoughness)
-		{
-			MetallicRoughness.Init(FVector2f(0, 1), SplatCount);
-		}
-	}
+	void RecalculateBounds();
+	const FBoxSphereBounds3f& GetBounds() const { return Bounds; }
 
 	static constexpr uint32 NumHighOrderSH = 45;
 };

@@ -94,6 +94,13 @@ void UGSplatAsset::GetAssetRegistryTags(FAssetRegistryTagsContext Context) const
 
 #endif
 
+void UGSplatAsset::RecalculateBounds()
+{
+	Splats.RecalculateBounds();
+	(void)MarkPackageDirty();
+}
+
+
 TSharedPtr<FGaussianSplatResourceWrapper> UGSplatAsset::GetOrCreateResource()
 {
 	check(IsInGameThread());
