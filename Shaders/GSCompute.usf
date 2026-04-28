@@ -184,7 +184,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
         OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz; 
         OutColorOpacity[Idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
 #if ENABLE_RELIGHTING
-        OutNormal[Idx] = GSResources.Normals[DispatchThreadId.x];
+        OutNormal[Idx] = mul((float3x3) Primitive.RelativeWorldToLocal, GSResources.Normals[DispatchThreadId.x]);
         OutMR[Idx] = GSResources.MetallicRoughness[DispatchThreadId.x];
 #endif
     }
