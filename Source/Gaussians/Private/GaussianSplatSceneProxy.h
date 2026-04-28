@@ -19,8 +19,19 @@ public:
 	virtual void CreateRenderThreadResources(FRHICommandListBase& RHICmdList) override;
 	virtual void DestroyRenderThreadResources() override;
 
+#if WITH_EDITOR
+	virtual HHitProxy* CreateHitProxies(UPrimitiveComponent* Component, TArray<TRefCountPtr<HHitProxy>>& OutHitProxies) override;
+#endif
+
 	virtual SIZE_T GetTypeHash() const override;
 	virtual uint32 GetMemoryFootprint() const override;
+
+	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
+	virtual void GetDynamicMeshElements(
+		const TArray<const FSceneView*>& Views, 
+		const FSceneViewFamily& ViewFamily, 
+		uint32 VisibilityMap, 
+		FMeshElementCollector& Collector) const override;
 	//~ End FPrimitiveSceneProxy Interface
 
 	FGaussianSplatResource* GetResource_RenderThread() const;
@@ -33,4 +44,9 @@ private:
 	TSharedPtr<FGaussianSplatResourceWrapper> GaussianSplatResource_RenderThread;
 
 	TWeakPtr<FGSViewExtension> ViewExtension;
+
+#if WITH_EDITOR
+	// Cached hit proxy created in CreateHitProxies, used for editor viewport click selection.
+	HHitProxy* SelectionHitProxy = nullptr;
+#endif
 };

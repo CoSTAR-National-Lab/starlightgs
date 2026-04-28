@@ -75,7 +75,7 @@ struct GAUSSIANS_API FGaussianSplatData
 protected:
 	// Bounds of all splats in the model. Used for hit proxies, wireframes, culling
 	UPROPERTY(VisibleAnywhere)
-	FBoxSphereBounds3f Bounds;
+	FBoxSphereBounds Bounds;
 
 
 public:
@@ -102,7 +102,7 @@ public:
 	void Resize(uint32 Num);
 
 	void RecalculateBounds();
-	const FBoxSphereBounds3f& GetBounds() const { return Bounds; }
+	const FBoxSphereBounds& GetBounds() const { return Bounds; }
 
 	static constexpr uint32 NumHighOrderSH = 45;
 };

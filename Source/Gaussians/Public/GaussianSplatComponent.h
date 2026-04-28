@@ -8,7 +8,7 @@
 #include "GaussianSplatComponent.generated.h"
 
 
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, ClassGroup = (Rendering), hidecategories = (Collision, Physics, Navigation))
 class GAUSSIANS_API UGaussianSplatComponent : public UPrimitiveComponent
 {
 	GENERATED_BODY()
@@ -33,6 +33,7 @@ public:
 
 	//~ Begin UPrimitiveComponent Interface
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
+	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 	//~ End UPrimitiveComponent Interface
 
 private:

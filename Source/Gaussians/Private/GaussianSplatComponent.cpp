@@ -50,6 +50,21 @@ FPrimitiveSceneProxy* UGaussianSplatComponent::CreateSceneProxy()
 	return new FGaussianSplatSceneProxy(this);
 }
 
+FBoxSphereBounds UGaussianSplatComponent::CalcBounds(const FTransform& LocalToWorld) const
+{
+	if (GaussianSplatAsset)
+	{
+		FBoxSphereBounds LocalBox = GaussianSplatAsset->Splats.GetBounds();
+
+		// Transform to world space
+		FBoxSphereBounds WorldBox = LocalBox.TransformBy(LocalToWorld);
+
+		return FBoxSphereBounds(WorldBox);
+	}
+
+	return FBoxSphereBounds{ };
+}
+
 void UGaussianSplatComponent::OnAssetUpdated()
 {
 	MarkRenderStateDirty();

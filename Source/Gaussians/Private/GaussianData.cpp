@@ -56,12 +56,12 @@ void FGaussianSplatData::Resize(uint32 Num)
 
 void FGaussianSplatData::RecalculateBounds()
 {
-	FBoxSphereBounds3f::Builder Builder{ };
+	FBoxSphereBounds::Builder Builder{ };
 
 	for (const auto& Point : Positions)
 	{
 		// TODO: Scale point and add min/max to take into account size of splat
-		Builder += Point;
+		Builder += static_cast<FVector>(Point);
 	}
 
 	Bounds = Builder;
