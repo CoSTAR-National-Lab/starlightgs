@@ -37,7 +37,7 @@ RWStructuredBuffer<float3> OutNormal;
 RWBuffer<float2> OutMR;
 #endif
 
-RWBuffer<float> OutDepth;
+RWBuffer<uint> OutDepth;
 RWBuffer<uint> OutGaussianIDX;
 
 // Capacity of buffers holding gaussian properties
@@ -179,7 +179,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 	    OutSSScale[Idx] = float4(MajorAxisMultiplier, MinorAxisMultiplier);
         OutConic[Idx] = Conic;
         
-        OutDepth[Idx] = ~order_preserving_float_map(ViewPosition.z);
+        OutDepth[Idx] = order_preserving_float_map(ViewPosition.z);
         OutGaussianIDX[Idx] = Idx;
         OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz; 
         OutColorOpacity[Idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
@@ -217,9 +217,9 @@ struct OutVertex
     float3 Color : COLOR;
 	float3 Conic : CONIC;
     float Opacity : OPACITY;
-    //float Depth : DEPTH;
 
 #if ENABLE_RELIGHTING
+    float Depth : DEPTH;
     float2 MR : METALLICROUGHNESS;
     float3 Normal : NORMAL_MEAN;
 #endif
@@ -261,9 +261,10 @@ OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint Instance
 
 	output.Mean = float2((float2(ScreenSpacePos.x, -ScreenSpacePos.y) + 1) * 0.5 * PrimaryView.ViewSizeAndInvSize.xy);
     output.Position = float4(ScreenSpacePos.xy + (Vertex.x * QuadScale.zw + Vertex.y * QuadScale.xy), 0, 1);
+    
 
-    //output.Depth = inverse_order_preserving_float_map(~VS_Depth[index]);
 #if ENABLE_RELIGHTING
+    output.Depth = inverse_order_preserving_float_map(VS_Depth[InstanceID]);
     output.MR = VS_MetallicRoughness[index];
 	output.Normal = VS_Normal[index];
 #endif
@@ -275,10 +276,11 @@ struct RTOut
 {
     float4 Color : SV_TARGET0;
 #if ENABLE_RELIGHTING
-    float3 Normal : SV_TARGET1;
-    float2 MetallicRoughness : SV_TARGET2;
-    float  Depth : SV_TARGET3;
+    float4 Normal : SV_TARGET1;
+    float4 MetallicRoughness : SV_TARGET2;
+    float4 Depth : SV_TARGET3;
 #endif
+
 };
 
  
@@ -294,17 +296,17 @@ RTOut GSSplatting_PS(in OutVertex input)
     //return premultiplied opacity
 	output.Color = float4(input.Color * Alpha, Alpha);
 
+   
+
 #if ENABLE_RELIGHTING
 	//return float4(input.UVCoord, 0, 1);
     //
     //gPosition = vec4(out_wsPos, 1.0) * g;
-    output.Normal = input.Normal * Alpha;
-    //
-    float depthPrem = 1.f * Alpha;
+    output.Normal = float4(input.Normal * Alpha, Alpha);
+    output.MetallicRoughness = float4(input.MR * Alpha, 0, Alpha);
 
-	output.Depth = depthPrem;
-    output.MetallicRoughness = input.MR * Alpha;
-
+    float depthPrem = input.Depth * Alpha;
+    output.Depth = float4(depthPrem, depthPrem, depthPrem, Alpha);
     //dummy values
     //output.Normal = float3(0, 0, 1);
     //output.Depth = 1;
