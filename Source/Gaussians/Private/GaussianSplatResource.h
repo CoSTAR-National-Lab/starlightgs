@@ -63,6 +63,8 @@ public:
 
 	// Gets splat count from CPU copy of splat data
 	uint32 GetSplatCount() const { return SplatData.SplatCount; }
+	// Checks from CPU copy of splat data if this resource supports relighting
+	bool SupportsRelighting() const { return SplatData.SupportsRelighting(); }
 
 private:
 	// CPU copy of data that this resource will copy to GPU

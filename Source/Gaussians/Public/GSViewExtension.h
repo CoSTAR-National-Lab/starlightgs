@@ -8,6 +8,7 @@
 #include "Rendering/GSplatGBuffer.h"
 
 class UWorldSubsystem;
+class FGaussianSplatSceneProxy;
 
 /**
  * 
@@ -30,18 +31,19 @@ public:
 
 private:
 	//Rasterization Pipeline // rendering into scene texture to begin with as a post process. later can do 
-	void GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& InView);
+	void GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const TSet<FGaussianSplatSceneProxy*>& Proxies);
 	void GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView);
 
 	// Composite splat buffer with GBuffer
 	void GSCompositionPass(FRDGBuilder& GraphBuilder, const FSceneView& InView);
 
 public:
-	void RegisterProxy(class FGaussianSplatSceneProxy* Proxy);
-	void UnregisterProxy(class FGaussianSplatSceneProxy* Proxy);
+	void RegisterProxy(FGaussianSplatSceneProxy* Proxy);
+	void UnregisterProxy(FGaussianSplatSceneProxy* Proxy);
 
 private:
-	TSet<class FGaussianSplatSceneProxy*> Proxies;
+	TSet<FGaussianSplatSceneProxy*> RelightableProxies;
+	TSet<FGaussianSplatSceneProxy*> NonRelightableProxies;
 
 	TMap<FName, FRDGBufferRef> TransientBuffers;
 	FGSplatGBuffer GSplatGBuffer;

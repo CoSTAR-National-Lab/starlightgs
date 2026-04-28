@@ -53,12 +53,12 @@ void FGaussianSplatSceneProxy::DestroyRenderThreadResources()
 
 	if (GaussianSplatResource_RenderThread)
 	{
-		GaussianSplatResource_RenderThread.Reset();
-
 		if (auto ViewExt = ViewExtension.Pin())
 		{
 			ViewExt->UnregisterProxy(this);
 		}
+
+		GaussianSplatResource_RenderThread.Reset();
 	}
 }
 
@@ -76,4 +76,9 @@ uint32 FGaussianSplatSceneProxy::GetMemoryFootprint() const
 FGaussianSplatResource* FGaussianSplatSceneProxy::GetResource_RenderThread() const
 {
 	return GaussianSplatResource_RenderThread->GetResource();
+}
+
+bool FGaussianSplatSceneProxy::SupportsRelighting() const
+{
+	return GaussianSplatResource_RenderThread->GetResource()->SupportsRelighting();
 }

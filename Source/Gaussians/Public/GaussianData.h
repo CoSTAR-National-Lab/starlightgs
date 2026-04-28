@@ -59,7 +59,6 @@ struct FGaussianSplatData
 	bool UseHighOrderSH() const { return bHasHighOrderSH && bUseHighOrderSH; }
 	bool UseMetallicRoughness() const { return bHasMetallicRoughness && bUseMetallicRoughness; }
 
-public:
 	// Normal vectors [optional] (nx, ny, nz)
 	UPROPERTY()
 	TArray<FVector3f> Normals;
@@ -72,6 +71,15 @@ public:
 	UPROPERTY()
 	TArray<FVector2f> MetallicRoughness;
 
+
+public:
+
+	bool SupportsRelighting() const
+	{
+		return UseNormals() && UseMetallicRoughness();
+	}
+
+public:
 	FGaussianSplatData()
 	{
 		Resize(SplatCount);
@@ -134,7 +142,6 @@ public:
 			MetallicRoughness.Init(FVector2f(0, 1), SplatCount);
 		}
 	}
-
 
 	static constexpr uint32 NumHighOrderSH = 45;
 };

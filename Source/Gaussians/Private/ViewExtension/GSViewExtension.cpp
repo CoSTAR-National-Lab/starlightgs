@@ -28,7 +28,9 @@ void FGSViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFamily)
 void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView,
 	const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
-	if (Proxies.IsEmpty())
+	// Process relightable proxies
+
+	if (RelightableProxies.IsEmpty())
 	{
 		return;
 	}
@@ -39,21 +41,26 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 	GSplatGBuffer.Clear(GraphBuilder);
 	
 
-	GSPrePass(GraphBuilder, InView);
+	GSPrePass(GraphBuilder, InView, RelightableProxies);
 	GSSplattingPass(GraphBuilder, InView);
-	
 }
 
 void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& InView,
 	const FPostProcessingInputs& Inputs)
 {
-	if (Proxies.IsEmpty())
+	// Render all splats that don't support relighting
+	if (!NonRelightableProxies.IsEmpty())
 	{
-		return;
+		// TODO: Require different permutation of CS/VS and different pixel shader
+		// TODO: As well as different render target.
 	}
 
-	//after splattery copy back to scene 
-	AddCopyTexturePass(GraphBuilder, GSplatGBuffer.GetBaseColorTexture(), Inputs.SceneTextures->GetContents()->SceneColorTexture);
+	// TODO: Will be replaced by GSplatGBuffer composition pass (which will occur post-base pass)
+	if (!RelightableProxies.IsEmpty())
+	{
+		//after splattery copy back to scene 
+		AddCopyTexturePass(GraphBuilder, GSplatGBuffer.GetBaseColorTexture(), Inputs.SceneTextures->GetContents()->SceneColorTexture);
+	}
 }
 
 bool FGSViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const
@@ -64,12 +71,28 @@ bool FGSViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionConte
 
 void FGSViewExtension::RegisterProxy(class FGaussianSplatSceneProxy* Proxy)
 {
-	check(!Proxies.Contains(Proxy));
-	Proxies.Add(Proxy);
+	if (Proxy->SupportsRelighting())
+	{
+		check(!RelightableProxies.Contains(Proxy));
+		RelightableProxies.Add(Proxy);
+	}
+	else
+	{
+		check(!NonRelightableProxies.Contains(Proxy));
+		NonRelightableProxies.Add(Proxy);
+	}
 }
 
 void FGSViewExtension::UnregisterProxy(class FGaussianSplatSceneProxy* Proxy)
 {
-	check(Proxies.Contains(Proxy));
-	Proxies.Remove(Proxy);
+	if (Proxy->SupportsRelighting())
+	{
+		check(RelightableProxies.Contains(Proxy));
+		RelightableProxies.Remove(Proxy);
+	}
+	else
+	{
+		check(NonRelightableProxies.Contains(Proxy));
+		NonRelightableProxies.Remove(Proxy);
+	}
 }

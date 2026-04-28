@@ -139,5 +139,8 @@ void UGSplatAsset::RecreateResource() const
 				// Will release and re-init RHI resources
 				Wrapper->GetResource()->UpdateSplats(RHICommandList, SplatsTemp);
 			});
+
+		// Splat data has changed - components should re-create their render state
+		OnAssetUpdate.Broadcast();
 	}
 }

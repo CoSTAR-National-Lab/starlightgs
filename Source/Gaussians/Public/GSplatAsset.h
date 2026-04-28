@@ -56,6 +56,9 @@ public:
 	virtual void GetAssetRegistryTags(FAssetRegistryTagsContext Context) const override;
 	//~ End UObject Interface
 
+
+	//--- GPU Resource Management ---//
+
 	// If the GPU resources have not been created yet,
 	// it will allocate buffers to contain GPU copy of splat data.
 	//
@@ -73,6 +76,10 @@ public:
 	void RecreateResource() const;
 
 
+	//--- Asset Actions ---//
+
+	// Invoked when the underlying splat data has been modified - e.g. on reimport.
+	// Used to tell components when to re-create their rendering resources
 	FGSplatAssetUpdate OnAssetUpdate;
 
 private:

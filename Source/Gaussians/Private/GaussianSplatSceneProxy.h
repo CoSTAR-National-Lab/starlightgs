@@ -25,6 +25,8 @@ public:
 
 	FGaussianSplatResource* GetResource_RenderThread() const;
 
+	bool SupportsRelighting() const;
+
 private:
 	// GPU Resources for the asset pointed to by the component
 	// It is NOT safe to dereference this pointer on the game thread

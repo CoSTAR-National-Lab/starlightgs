@@ -56,10 +56,6 @@ END_SHADER_PARAMETER_STRUCT()
 
 void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView)
 {
-	// Don't call this when there are no proxies
-	// TODO: Maybe relax this contract since it doesn't directly access proxy data? But still effectively no-ops if there are no proxies
-	check(!Proxies.IsEmpty());
-
 	auto PassParameters = GraphBuilder.AllocParameters<FSplattingPassPipelineParameters>();
 
 	PassParameters->VertexShader.View = InView.ViewUniformBuffer;
