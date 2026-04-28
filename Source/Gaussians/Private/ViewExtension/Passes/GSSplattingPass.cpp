@@ -5,6 +5,7 @@
 #include "PixelShaderUtils.h"
 #include "ShaderParameterStruct.h"
 #include "ScreenPass.h"
+#include "ScenePrivate.h"
 #include "PostProcess/PostProcessInputs.h"
 
 
@@ -66,6 +67,9 @@ END_SHADER_PARAMETER_STRUCT()
 
 void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, bool bRelighting)
 {
+	check(InView.bIsViewInfo);
+	const FViewInfo& ViewInfo = static_cast<const FViewInfo&>(InView);
+
 	auto PassParameters = GraphBuilder.AllocParameters<FSplattingPassPipelineParameters>();
 
 	PassParameters->VertexShader.View = InView.ViewUniformBuffer;
@@ -100,8 +104,10 @@ void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneVi
 		RDG_EVENT_NAME("GSRasterizePass"),
 		PassParameters,
 		ERDGPassFlags::Raster,
-		[PassParameters, VertexShader, PixelShader](FRHICommandList& RHICmdList)
+		[PassParameters, VertexShader, PixelShader, ViewRect = ViewInfo.ViewRect](FRHICommandList& RHICmdList)
 		{
+			RHICmdList.SetViewport(ViewRect.Min.X, ViewRect.Min.Y, 0.0f, ViewRect.Max.X, ViewRect.Max.Y, 1.0f);
+
 			// Initialize the Pipeline State
 			FGraphicsPipelineStateInitializer GraphicsPSOInit;
 			RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
