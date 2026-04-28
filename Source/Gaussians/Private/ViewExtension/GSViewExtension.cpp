@@ -29,6 +29,7 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 	const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
 	// Process relightable proxies
+	RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Lit");
 
 	if (RelightableProxies.IsEmpty())
 	{
@@ -43,12 +44,16 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 	GSPrePass(GraphBuilder, InView, RelightableProxies);
 	// TODO: Once GSPrePass and GSSplattingPass are combined, bRelighting can be deduced from proxies passed in
 	GSSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(), true);
+
+	GSCompositionPass(GraphBuilder, InView);
 }
 
 void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& InView,
 	const FPostProcessingInputs& Inputs)
 {
 	// Render all splats that don't support relighting
+	RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Unlit");
+
 	if (!NonRelightableProxies.IsEmpty())
 	{
 		GSPrePass(GraphBuilder, InView, NonRelightableProxies);
@@ -57,13 +62,6 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 		RenderTargets[0] = FRenderTargetBinding{ Inputs.SceneTextures->GetContents()->SceneColorTexture, ERenderTargetLoadAction::ELoad };
 		// TODO: Once GSPrePass and GSSplattingPass are combined, bRelighting can be deduced from proxies passed in
 		GSSplattingPass(GraphBuilder, InView, RenderTargets, false);
-	}
-
-	// TODO: Will be replaced by GSplatGBuffer composition pass (which will occur post-base pass)
-	if (!RelightableProxies.IsEmpty())
-	{
-		//after splattery copy back to scene 
-		AddCopyTexturePass(GraphBuilder, GSplatGBuffer.GetBaseColorTexture(), Inputs.SceneTextures->GetContents()->SceneColorTexture);
 	}
 }
 
