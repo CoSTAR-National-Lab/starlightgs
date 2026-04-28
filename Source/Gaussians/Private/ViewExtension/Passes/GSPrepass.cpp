@@ -122,6 +122,7 @@ void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& In
 		FGaussianSplatResource* Resource = Proxy->GetResource_RenderThread();
 
 		auto SplatCount  = Resource->GetSplatCount();
+		INC_DWORD_STAT_BY(STAT_SplatsRendered, SplatCount)
 
 		TUniformBufferRef<FGaussianSplatShaderResources> ResourceUniformBuffer = TUniformBufferRef<FGaussianSplatShaderResources>{ Resource->GetUniformBuffer() };
 		TUniformBufferRef<FPrimitiveUniformShaderParameters> PrimitiveUniformBuffer = TUniformBufferRef<FPrimitiveUniformShaderParameters>{ Proxy->GetUniformBuffer() };

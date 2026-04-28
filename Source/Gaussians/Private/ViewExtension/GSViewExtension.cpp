@@ -7,6 +7,7 @@
 
 #include "Subsystems/WorldSubsystem.h"
 
+DEFINE_STAT(STAT_SplatsRendered)
 
 FGSViewExtension::FGSViewExtension(const FAutoRegister& AutoRegister, UWorldSubsystem* Owner) : FSceneViewExtensionBase(AutoRegister), OwningSubsystem(Owner)
 {
@@ -14,6 +15,8 @@ FGSViewExtension::FGSViewExtension(const FAutoRegister& AutoRegister, UWorldSubs
 
 void FGSViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 {
+	// TODO: Won't work if multiple views active simultaneously
+	SET_DWORD_STAT(STAT_SplatsRendered, 0)
 }
 
 void FGSViewExtension::SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView)
@@ -38,7 +41,7 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 
 	GSplatGBuffer.Init(GraphBuilder, InView);
 
-	//RenderGraph doesnt recreate the resource every frame, so we need to clear it manually
+	// RenderGraph doesn't recreate the resource every frame, so we need to clear it manually
 	GSplatGBuffer.Clear(GraphBuilder);
 	
 	GSPrePass(GraphBuilder, InView, RelightableProxies);
