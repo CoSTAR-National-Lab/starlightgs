@@ -40,9 +40,9 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 	//RenderGraph doesnt recreate the resource every frame, so we need to clear it manually
 	GSplatGBuffer.Clear(GraphBuilder);
 	
-
 	GSPrePass(GraphBuilder, InView, RelightableProxies);
-	GSSplattingPass(GraphBuilder, InView);
+	// TODO: Once GSPrePass and GSSplattingPass are combined, bRelighting can be deduced from proxies passed in
+	GSSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(), true);
 }
 
 void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& InView,
@@ -51,8 +51,12 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 	// Render all splats that don't support relighting
 	if (!NonRelightableProxies.IsEmpty())
 	{
-		// TODO: Require different permutation of CS/VS and different pixel shader
-		// TODO: As well as different render target.
+		GSPrePass(GraphBuilder, InView, NonRelightableProxies);
+
+		FRenderTargetBindingSlots RenderTargets{};
+		RenderTargets[0] = FRenderTargetBinding{ Inputs.SceneTextures->GetContents()->SceneColorTexture, ERenderTargetLoadAction::ELoad };
+		// TODO: Once GSPrePass and GSSplattingPass are combined, bRelighting can be deduced from proxies passed in
+		GSSplattingPass(GraphBuilder, InView, RenderTargets, false);
 	}
 
 	// TODO: Will be replaced by GSplatGBuffer composition pass (which will occur post-base pass)

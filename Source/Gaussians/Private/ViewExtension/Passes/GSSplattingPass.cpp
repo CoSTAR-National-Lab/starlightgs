@@ -8,9 +8,15 @@
 #include "PostProcess/PostProcessInputs.h"
 
 
+class FPermutationEnableRelighting : SHADER_PERMUTATION_BOOL("ENABLE_RELIGHTING");
+using FSplattingPermutationDomain = TShaderPermutationDomain<FPermutationEnableRelighting>;
+
+
 class FSplattingPassVS :  public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FSplattingPassVS)
+
+	using FPermutationDomain = FSplattingPermutationDomain;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		RDG_BUFFER_ACCESS(IndirectArgs, ERHIAccess::IndirectArgs)
@@ -19,6 +25,8 @@ class FSplattingPassVS :  public FGlobalShader
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float4>, VS_SSScale)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float3>, VS_Conic)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float4>, VS_ColorOpacity)
+
+		// Only used when relighting is enabled
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float2>, VS_MetallicRoughness)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(RWStructuredBuffer<float3>, VS_Normal)
 
@@ -37,7 +45,9 @@ IMPLEMENT_GLOBAL_SHADER(FSplattingPassVS, "/Plugin/Gaussians/GSCompute.usf", "GS
 class FSplattingPassPS : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FSplattingPassPS)
-	
+
+	using FPermutationDomain = FSplattingPermutationDomain;
+
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
@@ -54,7 +64,7 @@ BEGIN_SHADER_PARAMETER_STRUCT(FSplattingPassPipelineParameters, )
 END_SHADER_PARAMETER_STRUCT()
 
 
-void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView)
+void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, bool bRelighting)
 {
 	auto PassParameters = GraphBuilder.AllocParameters<FSplattingPassPipelineParameters>();
 
@@ -64,18 +74,26 @@ void FGSViewExtension::GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneVi
 	PassParameters->VertexShader.VS_Conic = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutConic")]);
 	PassParameters->VertexShader.VS_ColorOpacity = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutColorOpacity")], PF_A32B32G32R32F);
 	PassParameters->VertexShader.VS_GaussianIDX = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutGaussianIDX")], PF_R32_UINT);
-	PassParameters->VertexShader.VS_Depth = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutDepth")], PF_R32_UINT);	
-	PassParameters->VertexShader.VS_MetallicRoughness = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutMR")], PF_G32R32F);
-	PassParameters->VertexShader.VS_Normal = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutNormal")]);
+	PassParameters->VertexShader.VS_Depth = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutDepth")], PF_R32_UINT);
+
+	if (bRelighting)
+	{
+		PassParameters->VertexShader.VS_MetallicRoughness = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutMR")], PF_G32R32F);
+		PassParameters->VertexShader.VS_Normal = GraphBuilder.CreateSRV(TransientBuffers[TEXT("OutNormal")]);
+	}
+
 	PassParameters->VertexShader.IndirectArgs = TransientBuffers[TEXT("CounterBuffer")];
 
-	PassParameters->PixelShader.RenderTargets = GSplatGBuffer.GetRenderTargetBindings();
+	// TODO: Verify quantity of render targets based on whether relighting is enabled or not
+	PassParameters->PixelShader.RenderTargets = RenderTargets;
 
 	// 5. Get Shader maps and shaders
 	const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());
 
-	TShaderMapRef<FSplattingPassVS> VertexShader(ShaderMap);
-	TShaderMapRef<FSplattingPassPS> PixelShader(ShaderMap);
+	FSplattingPermutationDomain Permutation;
+	Permutation.Set<FPermutationEnableRelighting>(bRelighting);
+	TShaderMapRef<FSplattingPassVS> VertexShader(ShaderMap, Permutation);
+	TShaderMapRef<FSplattingPassPS> PixelShader(ShaderMap, Permutation);
 
 	// 6. Add the pass
 	GraphBuilder.AddPass(

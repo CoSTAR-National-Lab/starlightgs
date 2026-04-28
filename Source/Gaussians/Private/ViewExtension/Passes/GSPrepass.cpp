@@ -33,6 +33,9 @@ class FGSPrepassCS : public FGlobalShader
 	DECLARE_GLOBAL_SHADER(FGSPrepassCS)
 	SHADER_USE_PARAMETER_STRUCT(FGSPrepassCS, FGlobalShader);
 
+	class FEnableRelighting : SHADER_PERMUTATION_BOOL("ENABLE_RELIGHTING");
+	using FPermutationDomain = TShaderPermutationDomain<FEnableRelighting>;
+
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
 		SHADER_PARAMETER_STRUCT_REF(FGaussianSplatShaderResources, GSResource)
@@ -45,6 +48,8 @@ class FGSPrepassCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float4>, OutSSScale)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutConic)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float4>, OutColorOpacity)
+
+		// Only used when relighting is enabled
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutNormal)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float2>, OutMR)
 
@@ -70,6 +75,7 @@ void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& In
 {
 	// Don't call this when there are no proxies
 	check(!Proxies.IsEmpty());
+	bool bRelighting = (*Proxies.FindArbitraryElement())->SupportsRelighting();
 
 	// Create transient buffers
 	auto CounterBufferDesc = FRDGBufferDesc::CreateIndirectDesc<FRHIDrawIndirectParameters>();
@@ -78,8 +84,6 @@ void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& In
 	auto OutNDCPositionsDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(FVector2f), Capacity);
 	auto OutNDCScalesDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(FVector4f), Capacity);
 	auto OutConicsDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), Capacity);
-	auto OutNormalDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), Capacity);
-	auto OutMRDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(FVector2f), Capacity);
 	auto OutColorOpacityDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(FVector4f), Capacity);
 
 	auto OutGaussianIDXDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity);
@@ -90,14 +94,28 @@ void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& In
 	TransientBuffers.Add(TEXT("OutNDCScalesBuffer"), GraphBuilder.CreateBuffer(OutNDCScalesDesc, TEXT("OutNDCScales")));
 	TransientBuffers.Add(TEXT("OutConic"), GraphBuilder.CreateBuffer(OutConicsDesc, TEXT("OutConics")));
 	TransientBuffers.Add(TEXT("OutColorOpacity"), GraphBuilder.CreateBuffer(OutColorOpacityDesc, TEXT("OutColorOpacity")));
-	TransientBuffers.Add(TEXT("OutNormal"), GraphBuilder.CreateBuffer(OutNormalDesc, TEXT("OutNormal")));
-	TransientBuffers.Add(TEXT("OutMR"), GraphBuilder.CreateBuffer(OutMRDesc, TEXT("OutMR")));
+
 	TransientBuffers.Add(TEXT("OutGaussianIDX"), GraphBuilder.CreateBuffer(OutGaussianIDXDesc, TEXT("OutGaussianIDX")));
 	TransientBuffers.Add(TEXT("OutDepth"), GraphBuilder.CreateBuffer(OutDepthDesc, TEXT("OutDepth")));
+
+	if (bRelighting)
+	{
+		auto OutNormalDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), Capacity);
+		auto OutMRDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(FVector2f), Capacity);
+
+		TransientBuffers.Add(TEXT("OutNormal"), GraphBuilder.CreateBuffer(OutNormalDesc, TEXT("OutNormal")));
+		TransientBuffers.Add(TEXT("OutMR"), GraphBuilder.CreateBuffer(OutMRDesc, TEXT("OutMR")));
+	}
 
 	// Clear Indirect ARGS
 	// Vertex count per instance will be set by dispatch thread 0
 	AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(TransientBuffers[TEXT("CounterBuffer")], PF_R32_UINT), 0);
+
+	const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());
+
+	FGSPrepassCS::FPermutationDomain Permutation;
+	Permutation.Set<FGSPrepassCS::FEnableRelighting>(bRelighting);
+	TShaderMapRef<FGSPrepassCS> PrePassShader(ShaderMap, Permutation);
 
 	for (auto Proxy : Proxies)
 	{
@@ -120,22 +138,23 @@ void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& In
 		Parameters->OutSSScale = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutNDCScalesBuffer")],		 PF_A32B32G32R32F);
 		Parameters->OutConic = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutConic")]);
 		Parameters->OutColorOpacity = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutColorOpacity")],		 PF_A32B32G32R32F);
-		Parameters->OutNormal = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutNormal")]);
-		Parameters->OutMR = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutMR")], PF_G32R32F);
 		Parameters->OutGaussianIDX = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutGaussianIDX")],		 PF_R32_UINT);
 		Parameters->OutDepth = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutDepth")],					 PF_R32_UINT);
 
-		Parameters->BufferCapacity = Capacity;
+		if (bRelighting)
+		{
+			Parameters->OutNormal = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutNormal")]);
+			Parameters->OutMR = GraphBuilder.CreateUAV(TransientBuffers[TEXT("OutMR")], PF_G32R32F);
+		}
 
-		const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());
-		TShaderMapRef<FGSPrepassCS> ComputeShader(ShaderMap);
+		Parameters->BufferCapacity = Capacity;
 
 		FIntVector DispatchSize = FComputeShaderUtils::GetGroupCount(SplatCount, FGSPrepassCS::GetThreadGroupSize1D());
 
 		FComputeShaderUtils::AddPass<FGSPrepassCS>(
 			GraphBuilder,
 			RDG_EVENT_NAME("GSPrepass"),
-			ComputeShader,
+			PrePassShader,
 			Parameters,
 			DispatchSize
 		);

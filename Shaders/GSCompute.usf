@@ -2,6 +2,9 @@
 #include "/Engine/Private/Quaternion.ush"
 #include "/Engine/Generated/GeneratedUniformBuffers.ush"
 
+#ifndef ENABLE_RELIGHTING
+#define ENABLE_RELIGHTING true
+#endif
 
 // Check isnan(value) before use.
 uint order_preserving_float_map(float value)
@@ -28,8 +31,11 @@ RWBuffer<float2> OutSSPositions;
 RWBuffer<float4> OutSSScale;
 RWStructuredBuffer<float3> OutConic;
 RWBuffer<float4> OutColorOpacity;
+
+#if ENABLE_RELIGHTING
 RWStructuredBuffer<float3> OutNormal;
 RWBuffer<float2> OutMR;
+#endif
 
 RWBuffer<float> OutDepth;
 RWBuffer<uint> OutGaussianIDX;
@@ -170,7 +176,6 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
     if (Idx < BufferCapacity)
     {
         OutSSPositions[Idx] = ClipPosition.xy;
-	    OutSSScale[Idx] = 0.0f;
 	    OutSSScale[Idx] = float4(MajorAxisMultiplier, MinorAxisMultiplier);
         OutConic[Idx] = Conic;
         
@@ -178,8 +183,10 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
         OutGaussianIDX[Idx] = Idx;
         OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz; 
         OutColorOpacity[Idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
+#if ENABLE_RELIGHTING
         OutNormal[Idx] = GSResources.Normals[DispatchThreadId.x];
         OutMR[Idx] = GSResources.MetallicRoughness[DispatchThreadId.x];
+#endif
     }
 	else
 	{
@@ -193,8 +200,11 @@ Buffer<float4> VS_SSScale;
 StructuredBuffer<float3> VS_Conic;
 
 Buffer<float4> VS_ColorOpacity;
+
+#if ENABLE_RELIGHTING
 Buffer<float2> VS_MetallicRoughness;
 StructuredBuffer<float3> VS_Normal;
+#endif
 
 Buffer<uint> VS_Depth;
 Buffer<uint> VS_GaussianIDX;
@@ -208,10 +218,13 @@ struct OutVertex
 	float3 Conic : CONIC;
     float Opacity : OPACITY;
     //float Depth : DEPTH;
-    float2 MR : METALLICROUGHNESS;
-    float3 Normal : NORMAL_MEAN; 
-	float2 Mean : MEAN;
 
+#if ENABLE_RELIGHTING
+    float2 MR : METALLICROUGHNESS;
+    float3 Normal : NORMAL_MEAN;
+#endif
+
+	float2 Mean : MEAN;
 	
 	//float3 out_wsPos : SV_WSPOS;
 	//float out_depth : SV_DEPTH;
@@ -250,8 +263,10 @@ OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint Instance
     output.Position = float4(ScreenSpacePos.xy + (Vertex.x * QuadScale.zw + Vertex.y * QuadScale.xy), 0, 1);
 
     //output.Depth = inverse_order_preserving_float_map(~VS_Depth[index]);
+#if ENABLE_RELIGHTING
     output.MR = VS_MetallicRoughness[index];
 	output.Normal = VS_Normal[index];
+#endif
 
     return output;
 }
@@ -259,9 +274,11 @@ OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint Instance
 struct RTOut
 {
     float4 Color : SV_TARGET0;
+#if ENABLE_RELIGHTING
     float3 Normal : SV_TARGET1;
     float2 MetallicRoughness : SV_TARGET2;
     float  Depth : SV_TARGET3;
+#endif
 };
 
  
@@ -277,7 +294,7 @@ RTOut GSSplatting_PS(in OutVertex input)
     //return premultiplied opacity
 	output.Color = float4(input.Color * Alpha, Alpha);
 
-
+#if ENABLE_RELIGHTING
 	//return float4(input.UVCoord, 0, 1);
     //
     //gPosition = vec4(out_wsPos, 1.0) * g;
@@ -292,6 +309,7 @@ RTOut GSSplatting_PS(in OutVertex input)
     //output.Normal = float3(0, 0, 1);
     //output.Depth = 1;
     //output.MetallicRoughness = float2(1,0);
+#endif
 
     return output;
 }

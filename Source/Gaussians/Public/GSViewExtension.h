@@ -25,14 +25,13 @@ public:
 
 	virtual void PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures) override;
 	virtual void PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FPostProcessingInputs& Inputs) override;
-	//FRDGTexture GSplattingTransientTexture;
-
 	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
 
 private:
-	//Rasterization Pipeline // rendering into scene texture to begin with as a post process. later can do 
+	//Rasterization Pipeline // rendering into scene texture to begin with as a post process. later can do
+	// TODO: Will be combined into single function to avoid storing transient buffers as class members
 	void GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const TSet<FGaussianSplatSceneProxy*>& Proxies);
-	void GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView);
+	void GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, bool bRelighting);
 
 	// Composite splat buffer with GBuffer
 	void GSCompositionPass(FRDGBuilder& GraphBuilder, const FSceneView& InView);
