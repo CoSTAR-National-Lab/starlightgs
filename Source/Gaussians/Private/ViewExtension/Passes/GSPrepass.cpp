@@ -161,16 +161,27 @@ void FGSViewExtension::GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& In
 	}
 
 	// Sort all projected screens-space splats along view axis
+	{
+		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Radix Sort");
 
-	auto pingpongvalue = GraphBuilder.CreateBuffer(OutGaussianIDXDesc, TEXT("PingpongIDX"));
-	auto pingpongkey = GraphBuilder.CreateBuffer(OutDepthDesc, TEXT("PingpongValue"));
+		auto pingpongvalue = GraphBuilder.CreateBuffer(OutGaussianIDXDesc, TEXT("PingpongIDX"));
+		auto pingpongkey = GraphBuilder.CreateBuffer(OutDepthDesc, TEXT("PingpongValue"));
 
-	TArray<FRDGBufferRef> InValues = { TransientBuffers[TEXT("OutGaussianIDX")], pingpongvalue };
-	TArray<FRDGBufferRef> InKeys = { TransientBuffers[TEXT("OutDepth")], pingpongkey };
+		TArray<FRDGBufferRef> InValues = { TransientBuffers[TEXT("OutGaussianIDX")], pingpongvalue };
+		TArray<FRDGBufferRef> InKeys = { TransientBuffers[TEXT("OutDepth")], pingpongkey };
 
+		uint32 Index = GPURadixSort::SortBufferIndirect(
+			GraphBuilder, 
+			InKeys,
+			InValues, 
+			0,
+			TransientBuffers[TEXT("CounterBuffer")],
+			1,
+			UINT32_MAX, 
+			GMaxRHIFeatureLevel
+		);
 
-	auto index = GPURadixSort::SortBufferIndirect(GraphBuilder, InKeys, InValues, 0, TransientBuffers[TEXT("CounterBuffer")], 1, UINT32_MAX, GMaxRHIFeatureLevel);
-
-	TransientBuffers[TEXT("OutGaussianIDX")] = InValues[index];
-	TransientBuffers[TEXT("OutDepth")] = InKeys[index];
+		TransientBuffers[TEXT("OutGaussianIDX")] = InValues[Index];
+		TransientBuffers[TEXT("OutDepth")] = InKeys[Index];
+	}
 }
