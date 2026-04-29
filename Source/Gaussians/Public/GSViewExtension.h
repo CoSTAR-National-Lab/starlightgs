@@ -7,6 +7,9 @@
 
 #include "Rendering/GSplatGBuffer.h"
 
+DECLARE_STATS_GROUP(TEXT("Gaussians"), STATGROUP_Gaussians, STATCAT_Advanced);
+DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("SplatsRendered"), STAT_SplatsRendered, STATGROUP_Gaussians, GAUSSIANS_API);
+
 class UWorldSubsystem;
 class FGaussianSplatSceneProxy;
 
@@ -41,9 +44,11 @@ public:
 	void UnregisterProxy(FGaussianSplatSceneProxy* Proxy);
 
 private:
+	// Relit and unlit splats are kept separate as they are rendered in different passes
 	TSet<FGaussianSplatSceneProxy*> RelightableProxies;
 	TSet<FGaussianSplatSceneProxy*> NonRelightableProxies;
 
+	// TODO: Will remove transient resources from class members
 	TMap<FName, FRDGBufferRef> TransientBuffers;
 	FGSplatGBuffer GSplatGBuffer;
 
