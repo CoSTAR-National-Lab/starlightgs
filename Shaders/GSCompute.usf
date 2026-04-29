@@ -110,7 +110,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
     // Init counter
     if (DispatchThreadId.x == 0)
     {
-        Counter[0] = 6; // 6 vertices for a quad in a triangle list
+        Counter[0] = 4; // 4 vertices for a quad in a triangle strip
 	}
 
 	if (GroupIndex == 0)
@@ -298,15 +298,12 @@ struct FOutVertex
 };
 
 
-static float2 Quad[6] =
+static float2 Quad[4] =
 {
 	float2(-1, -1),
 	float2(-1, 1),
-	float2(1, 1),
-
-	float2(-1, -1),
-	float2(1, 1),
-	float2(1, -1)
+	float2(1, -1),
+	float2(1, 1)
 };
 
 FOutVertex GSSplatting_VS(uint GlobalVertexId : SV_VertexID, uint InstanceID : SV_InstanceID )

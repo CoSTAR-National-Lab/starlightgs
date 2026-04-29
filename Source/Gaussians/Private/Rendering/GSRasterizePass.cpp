@@ -21,7 +21,8 @@ static TAutoConsoleVariable<int32> CVarGaussiansMaxSplats(
 
 
 class FPermutationEnableRelighting : SHADER_PERMUTATION_BOOL("ENABLE_RELIGHTING");
-using FSplattingPermutationDomain = TShaderPermutationDomain<FPermutationEnableRelighting>;
+class FTriangleStrip : SHADER_PERMUTATION_BOOL("TRIANGLESTRIP");
+using FSplattingPermutationDomain = TShaderPermutationDomain<FPermutationEnableRelighting, FTriangleStrip>;
 
 class FGSPrepassCS : public FGlobalShader
 {
@@ -291,7 +292,7 @@ void FGSViewExtension::GaussianSplattingPass(
 				GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI = GEmptyVertexDeclaration.VertexDeclarationRHI; //using SV_VertexID
 				GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
 				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = PixelShader.GetPixelShader();
-				GraphicsPSOInit.PrimitiveType = PT_TriangleList;
+				GraphicsPSOInit.PrimitiveType = PT_TriangleStrip;
 
 				SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit, 0);
 
