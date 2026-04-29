@@ -21,8 +21,7 @@ static TAutoConsoleVariable<int32> CVarGaussiansMaxSplats(
 
 
 class FPermutationEnableRelighting : SHADER_PERMUTATION_BOOL("ENABLE_RELIGHTING");
-class FTriangleStrip : SHADER_PERMUTATION_BOOL("TRIANGLESTRIP");
-using FSplattingPermutationDomain = TShaderPermutationDomain<FPermutationEnableRelighting, FTriangleStrip>;
+using FSplattingPermutationDomain = TShaderPermutationDomain<FPermutationEnableRelighting>;
 
 class FGSPrepassCS : public FGlobalShader
 {

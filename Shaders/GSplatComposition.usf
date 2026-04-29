@@ -56,6 +56,11 @@ void GSplatCompositionPS(
 )
 {
 	const float4 BaseColor = GSplatBaseColor.Sample(View.SharedBilinearClampedSampler, InUV).rgba;
+	if (BaseColor.a < AlphaThreshold)
+	{
+		discard;
+	}
+
 	const float3 WorldSpaceNormal = normalize(GSplatNormal.Sample(View.SharedBilinearClampedSampler, InUV).rgb);
 	const float2 MetallicRoughness = GSplatMetallicRoughness.Sample(View.SharedBilinearClampedSampler, InUV).rg;
 
@@ -69,7 +74,7 @@ void GSplatCompositionPS(
 	GBufferData.SpecularColor = 0.0f;
 	GBufferData.BaseColor = BaseColor.rgb;
 	GBufferData.Metallic = MetallicRoughness.r;
-	GBufferData.Specular = 0.0f;
+	GBufferData.Specular = 1.0f;
 	GBufferData.Roughness = MetallicRoughness.g;
 	GBufferData.ShadingModelID = SHADINGMODELID_DEFAULT_LIT;
 	GBufferData.Velocity = 0.0f;
@@ -79,7 +84,7 @@ void GSplatCompositionPS(
 	FPixelShaderOut PSOut;
 	EncodeGBufferToMRT(PSOut, GBufferData, /* QuantizationBias = */0.0f);
 	
-	OutDepth = BaseColor.a >= AlphaThreshold ? GBufferData.Depth : 0.0f;
+	OutDepth = GBufferData.Depth;
 
 #if PIXELSHADEROUTPUT_MRT0
 	OutTarget0 = PSOut.MRT[0];

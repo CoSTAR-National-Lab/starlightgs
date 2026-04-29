@@ -137,8 +137,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 		float4 ClipPosition = mul(ViewPosition, ViewToClip);
 
 	    // TODO: Clipping should depend on size of splat
-	    // TODO: Probably only clip z here?
-	    float clip = 1.05 * ClipPosition.w;
+	    float clip = 1.3f * ClipPosition.w;
 		bool bClipped = (ClipPosition.z < -clip || ClipPosition.x < -clip || ClipPosition.x > clip || ClipPosition.y < -clip || ClipPosition.y > clip);
 
 		if (!bClipped)
@@ -202,26 +201,38 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 				float2 MajorAxisMultiplier = MajorAxis / (ViewSize * 0.5f);
 				float2 MinorAxisMultiplier = MinorAxis / (ViewSize * 0.5f);
 
-				// Write splat properties to groupshared memory
-				uint Index;
-				InterlockedAdd(GS_NumSplats, 1, Index);
+				// Check if screen space quad is on-screen
+				// TODO: I'm sure this can be done in less operations
+				float2 V00 = ClipPosition.xy + (-1 * MinorAxisMultiplier + -1 * MajorAxisMultiplier);
+				float2 V10 = ClipPosition.xy + ( 1 * MinorAxisMultiplier + -1 * MajorAxisMultiplier);
+				float2 V01 = ClipPosition.xy + (-1 * MinorAxisMultiplier +  1 * MajorAxisMultiplier);
+				float2 V11 = ClipPosition.xy + ( 1 * MinorAxisMultiplier +  1 * MajorAxisMultiplier);
+				float2 Min = min(min(V00, V10), min(V01, V11));
+				float2 Max = max(max(V00, V10), max(V01, V11));
 
-				GS_SSPositions[Index] = ClipPosition.xy;
-				GS_SSScale[Index] = float4(MajorAxisMultiplier, MinorAxisMultiplier);
-				GS_Conic[Index] = Conic;
-        
-				GS_ColorOpacity[Index] = GSResources.SHAndOpacities[DispatchThreadId.x];
+				if (all(and(Min < 1.0f, Max.x > -1.0f)))
+				{
+					// Write splat properties to groupshared memory
+					uint Index;
+					InterlockedAdd(GS_NumSplats, 1, Index);
+
+					GS_SSPositions[Index] = ClipPosition.xy;
+					GS_SSScale[Index] = float4(MajorAxisMultiplier, MinorAxisMultiplier);
+					GS_Conic[Index] = Conic;
+	        
+					GS_ColorOpacity[Index] = GSResources.SHAndOpacities[DispatchThreadId.x];
 #if ENABLE_RELIGHTING
-				GS_Depth[Index] = order_preserving_float_map(ViewPosition.z);
+					GS_Depth[Index] = order_preserving_float_map(ViewPosition.z);
 
-				float3 WorldSpaceNormal = mul((float3x3) Primitive.RelativeWorldToLocal, GSResources.Normals[DispatchThreadId.x]);
-				GS_Normal[Index] = PackNormal(WorldSpaceNormal);
+					float3 WorldSpaceNormal = mul((float3x3) Primitive.RelativeWorldToLocal, GSResources.Normals[DispatchThreadId.x]);
+					GS_Normal[Index] = PackNormal(WorldSpaceNormal);
 
-				GS_MetallicRoughness[Index] = PackMetallicRoughness(GSResources.MetallicRoughness[DispatchThreadId.x]);
+					GS_MetallicRoughness[Index] = PackMetallicRoughness(GSResources.MetallicRoughness[DispatchThreadId.x]);
 #else
-				// Unlit splats use opposite blending function. This is to be able to draw directly into scene colour texture and avoid an intermediate render target
-				GS_Depth[Index] = ~order_preserving_float_map(ViewPosition.z);
+					// Unlit splats use opposite blending function. This is to be able to draw directly into scene colour texture and avoid an intermediate render target
+					GS_Depth[Index] = ~order_preserving_float_map(ViewPosition.z);
 #endif
+				}
 			}
 		}
     }
