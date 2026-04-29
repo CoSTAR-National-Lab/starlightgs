@@ -45,7 +45,7 @@ class FGSPrepassCS : public FGlobalShader
 
 		// Only used when relighting is enabled
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutNormal)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutMR)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutMetallicRoughness)
 
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutDepth)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutGaussianIDX)
@@ -59,7 +59,7 @@ class FGSPrepassCS : public FGlobalShader
 		OutEnvironment.SetDefine(TEXT("THREADGROUP_SIZE_1D"), GetThreadGroupSize1D());
 	}
 
-	static uint32 GetThreadGroupSize1D() { return 256; }
+	static uint32 GetThreadGroupSize1D() { return 128; }
 };
 
 IMPLEMENT_GLOBAL_SHADER(FGSPrepassCS, "/Plugin/Gaussians/GSCompute.usf", "GSPrepass", SF_Compute);
@@ -208,7 +208,7 @@ void FGSViewExtension::GaussianSplattingPass(
 		if (bRelighting)
 		{
 			Parameters->OutNormal = GraphBuilder.CreateUAV(NormalBuffer, PF_R32_UINT);
-			Parameters->OutMR = GraphBuilder.CreateUAV(MetallicRoughnessBuffer, PF_R32_UINT);
+			Parameters->OutMetallicRoughness = GraphBuilder.CreateUAV(MetallicRoughnessBuffer, PF_R32_UINT);
 		}
 
 		Parameters->BufferCapacity = Capacity;
