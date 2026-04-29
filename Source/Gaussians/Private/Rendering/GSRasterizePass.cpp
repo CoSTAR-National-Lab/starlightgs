@@ -44,8 +44,8 @@ class FGSPrepassCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float4>, OutColorOpacity)
 
 		// Only used when relighting is enabled
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutNormal)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float2>, OutMR)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutNormal)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutMR)
 
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutDepth)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutGaussianIDX)
@@ -80,8 +80,8 @@ class FSplattingPassVS : public FGlobalShader
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float4>, VS_ColorOpacity)
 
 		// Only used when relighting is enabled
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float2>, VS_MetallicRoughness)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(RWStructuredBuffer<float3>, VS_Normal)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_Normal) // Octahedron encoding 16bpc
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_MetallicRoughness)
 
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_Depth)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_GaussianIDX)
@@ -163,8 +163,8 @@ void FGSViewExtension::GaussianSplattingPass(
 	FRDGBufferRef MetallicRoughnessBuffer = nullptr;
 	if (bRelighting)
 	{
-		NormalBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), Capacity), TEXT("Gaussians.Normal"));
-		MetallicRoughnessBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(FVector2f), Capacity), TEXT("Gaussians.MR"));
+		NormalBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), Capacity), TEXT("Gaussians.Normal"));
+		MetallicRoughnessBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity), TEXT("Gaussians.MetallicRoughness"));
 	}
 
 	// Clear Indirect ARGS
@@ -207,8 +207,8 @@ void FGSViewExtension::GaussianSplattingPass(
 
 		if (bRelighting)
 		{
-			Parameters->OutNormal = GraphBuilder.CreateUAV(NormalBuffer);
-			Parameters->OutMR = GraphBuilder.CreateUAV(MetallicRoughnessBuffer, PF_G32R32F);
+			Parameters->OutNormal = GraphBuilder.CreateUAV(NormalBuffer, PF_R32_UINT);
+			Parameters->OutMR = GraphBuilder.CreateUAV(MetallicRoughnessBuffer, PF_R32_UINT);
 		}
 
 		Parameters->BufferCapacity = Capacity;
@@ -260,8 +260,8 @@ void FGSViewExtension::GaussianSplattingPass(
 
 		if (bRelighting)
 		{
-			PassParameters->VertexShader.VS_Normal = GraphBuilder.CreateSRV(NormalBuffer);
-			PassParameters->VertexShader.VS_MetallicRoughness = GraphBuilder.CreateSRV(MetallicRoughnessBuffer, PF_G32R32F);
+			PassParameters->VertexShader.VS_Normal = GraphBuilder.CreateSRV(NormalBuffer, PF_R32_UINT);
+			PassParameters->VertexShader.VS_MetallicRoughness = GraphBuilder.CreateSRV(MetallicRoughnessBuffer, PF_R32_UINT);
 		}
 
 		PassParameters->VertexShader.IndirectArgs = IndirectArgsBuffer;

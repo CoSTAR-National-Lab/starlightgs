@@ -1,5 +1,6 @@
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/Quaternion.ush"
+#include "/Engine/Private/OctahedralCommon.ush"
 #include "/Engine/Generated/GeneratedUniformBuffers.ush"
 
 
@@ -27,6 +28,28 @@ float inverse_order_preserving_float_map(uint value)
 }
 
 
+uint PackNormal(float3 Normal)
+{
+	float2 OctahedronDirection = UnitVectorToOctahedron(Normal);
+	return (f32tof16(OctahedronDirection.x) << 16) | f32tof16(OctahedronDirection.y);
+}
+
+float3 UnpackNormal(uint PackedNormal)
+{
+	return OctahedronToUnitVector(float2(f16tof32(PackedNormal >> 16), f16tof32(PackedNormal)));
+}
+
+uint PackMetallicRoughness(float2 MetallicRoughness)
+{
+	return (f32tof16(saturate(MetallicRoughness.x)) << 16) | f32tof16(saturate(MetallicRoughness.y));
+}
+
+float2 UnpackMetallicRoughness(uint PackedMR)
+{
+	return float2(f16tof32(PackedMR >> 16), f16tof32(PackedMR));
+}
+
+
 RWBuffer<uint> Counter;
 RWBuffer<float2> OutSSPositions;
 RWBuffer<float4> OutSSScale;
@@ -34,8 +57,8 @@ RWStructuredBuffer<float3> OutConic;
 RWBuffer<float4> OutColorOpacity;
 
 #if ENABLE_RELIGHTING
-RWStructuredBuffer<float3> OutNormal;
-RWBuffer<float2> OutMR;
+RWBuffer<uint> OutNormal; // Octahedron encoding 16bpc
+RWBuffer<uint> OutMR;
 #endif
 
 RWBuffer<uint> OutDepth;
@@ -96,7 +119,8 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 	float4 ClipPosition = mul(ViewPosition, ViewToClip);
 
     // TODO: Clipping should depend on size of splat
-    float clip = 1.05 * ClipPosition.w; //Need to see how conservative that
+    // TODO: Probably only clip z here?
+    float clip = 1.05 * ClipPosition.w;
     if (ClipPosition.z < -clip || ClipPosition.x < -clip || ClipPosition.x > clip || ClipPosition.y < -clip || ClipPosition.y > clip)
     {
         return;
@@ -164,6 +188,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
     float2 MajorAxisMultiplier = MajorAxis / (ViewSize * 0.5f);
     float2 MinorAxisMultiplier = MinorAxis / (ViewSize * 0.5f);
 
+
     // Output properties of screenspace quad and projected gaussians
 
     //Indirect args
@@ -184,8 +209,11 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
         OutColorOpacity[Idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
 #if ENABLE_RELIGHTING
         OutDepth[Idx] = order_preserving_float_map(ViewPosition.z);
-        OutNormal[Idx] = mul((float3x3) Primitive.RelativeWorldToLocal, GSResources.Normals[DispatchThreadId.x]);
-        OutMR[Idx] = GSResources.MetallicRoughness[DispatchThreadId.x];
+
+		float3 WorldSpaceNormal = mul((float3x3) Primitive.RelativeWorldToLocal, GSResources.Normals[DispatchThreadId.x]);
+		OutNormal[Idx] = PackNormal(WorldSpaceNormal);
+
+		OutMR[Idx] = PackMetallicRoughness(GSResources.MetallicRoughness[DispatchThreadId.x]);
 #else
         // Unlit splats use opposite blending function. This is to be able to draw directly into scene colour texture and avoid an intermediate render target
         OutDepth[Idx] = ~order_preserving_float_map(ViewPosition.z);
@@ -207,8 +235,8 @@ Buffer<float4> VS_ColorOpacity;
 Buffer<uint> VS_Depth;
 
 #if ENABLE_RELIGHTING
-Buffer<float2> VS_MetallicRoughness;
-StructuredBuffer<float3> VS_Normal;
+Buffer<uint> VS_MetallicRoughness;
+Buffer<uint> VS_Normal; // Octahedron encoding 16bpc
 #endif
 
 Buffer<uint> VS_GaussianIDX;
@@ -270,8 +298,8 @@ FOutVertex GSSplatting_VS(uint GlobalVertexId : SV_VertexID, uint InstanceID : S
     );
 
 #if ENABLE_RELIGHTING
-    Output.MR = VS_MetallicRoughness[Index];
-	Output.Normal = VS_Normal[Index];
+	Output.MR = UnpackMetallicRoughness(VS_MetallicRoughness[Index]);
+	Output.Normal = UnpackNormal(VS_Normal[Index]);
 #endif
 
     return Output;
