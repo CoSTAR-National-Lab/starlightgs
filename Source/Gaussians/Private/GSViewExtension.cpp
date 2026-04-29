@@ -52,10 +52,15 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 	if (!NonRelightableProxies.IsEmpty())
 	{
 		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Unlit");
-		FRDGTextureRef SceneColorTexture = Inputs.SceneTextures->GetContents()->SceneColorTexture;
+		const FSceneTextureUniformParameters* SceneTextures = Inputs.SceneTextures->GetContents();
+		FRDGTextureRef SceneColorTexture = SceneTextures->SceneColorTexture;
+		FRDGTextureRef SceneDepthTexture = SceneTextures->SceneDepthTexture;
 
 		FRenderTargetBindingSlots RenderTargets{};
 		RenderTargets[0] = FRenderTargetBinding{ SceneColorTexture, ERenderTargetLoadAction::ELoad };
+		RenderTargets.DepthStencil = FDepthStencilBinding{
+			SceneDepthTexture, ERenderTargetLoadAction::ELoad, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthRead_StencilNop
+		};
 
 		GaussianSplattingPass(GraphBuilder, InView, RenderTargets, NonRelightableProxies);
 	}

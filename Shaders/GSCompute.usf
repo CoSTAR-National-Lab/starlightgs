@@ -2,9 +2,11 @@
 #include "/Engine/Private/Quaternion.ush"
 #include "/Engine/Generated/GeneratedUniformBuffers.ush"
 
+
 #ifndef ENABLE_RELIGHTING
 #define ENABLE_RELIGHTING true
 #endif
+
 
 // Check isnan(value) before use.
 uint order_preserving_float_map(float value)
@@ -24,7 +26,6 @@ float inverse_order_preserving_float_map(uint value)
     return asfloat(value ^ mask);
 }
 
-//out
 
 RWBuffer<uint> Counter;
 RWBuffer<float2> OutSSPositions;
@@ -89,7 +90,6 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 
     float4 TranslatedPosition = DFTransformLocalToTranslatedWorld(Position, MakeDFMatrix4x3(Primitive.PositionHigh, Primitive.LocalToRelativeWorld), PrimaryView.PreViewTranslation);
 
-    //apply correct scale because UU
     TranslatedPosition.xyz *= 0.01f;
 
     float4 ViewPosition = mul(TranslatedPosition, ViewMatrix);
@@ -204,15 +204,16 @@ StructuredBuffer<float3> VS_Conic;
 
 Buffer<float4> VS_ColorOpacity;
 
+Buffer<uint> VS_Depth;
+
 #if ENABLE_RELIGHTING
 Buffer<float2> VS_MetallicRoughness;
 StructuredBuffer<float3> VS_Normal;
-Buffer<uint> VS_Depth;
 #endif
 
 Buffer<uint> VS_GaussianIDX;
 
-struct OutVertex
+struct FOutVertex
 {
 	float4 Position : SV_POSITION;
 	float2 Mean : MEAN;
@@ -221,83 +222,96 @@ struct OutVertex
 	float3 Conic : CONIC;
     float Opacity : OPACITY;
 
-#if ENABLE_RELIGHTING
     float Depth : DEPTH;
+
+#if ENABLE_RELIGHTING
     float2 MR : METALLICROUGHNESS;
     float3 Normal : NORMAL_MEAN;
 #endif
 };
 
-OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint InstanceID : SV_InstanceID )
+
+static float2 Quad[6] =
 {
-	float2 Quad[6] = 
-    {
-		float2(-1, -1),
-		float2(-1, 1),
-		float2(1, 1),
+	float2(-1, -1),
+	float2(-1, 1),
+	float2(1, 1),
 
-		float2(-1, -1),
-		float2(1, 1),
-		float2(1, -1)
-	};
+	float2(-1, -1),
+	float2(1, 1),
+	float2(1, -1)
+};
 
-    uint index = VS_GaussianIDX[InstanceID];
+FOutVertex GSSplatting_VS(uint GlobalVertexId : SV_VertexID, uint InstanceID : SV_InstanceID )
+{
+    uint Index = VS_GaussianIDX[InstanceID];
 
-    OutVertex output;
-    output.Color = VS_ColorOpacity[index].rgb;
-    output.Opacity = VS_ColorOpacity[index].a;
+    FOutVertex Output;
 
-    float3 Conic = VS_Conic[index];
-	output.Conic = float3(-0.5 * Conic.x, -Conic.y, -0.5 * Conic.z);
+    Output.Color = VS_ColorOpacity[Index].rgb;
+    Output.Opacity = VS_ColorOpacity[Index].a;
 
-    float4 QuadScale = VS_SSScale[index];
-    float2 ScreenSpacePos = VS_SSPositions[index];
+    float3 Conic = VS_Conic[Index];
+	Output.Conic = float3(-0.5 * Conic.x, -Conic.y, -0.5 * Conic.z);
+
+    float4 QuadScale = VS_SSScale[Index];
+    float2 ScreenSpacePos = VS_SSPositions[Index];
     float2 Vertex = Quad[GlobalVertexId];
 
-	output.Mean = float2((float2(ScreenSpacePos.x, -ScreenSpacePos.y) + 1) * 0.5 * PrimaryView.ViewSizeAndInvSize.xy);
-    output.Position = float4(ScreenSpacePos.xy + (Vertex.x * QuadScale.zw + Vertex.y * QuadScale.xy), 0, 1);
-    
+	Output.Mean = float2((float2(ScreenSpacePos.x, -ScreenSpacePos.y) + 1) * 0.5 * PrimaryView.ViewSizeAndInvSize.xy);
+    Output.Position = float4(ScreenSpacePos.xy + (Vertex.x * QuadScale.zw + Vertex.y * QuadScale.xy), 0, 1);
+
+    // Must invert bits for unlit splats as they are sorted in opposite order
+    Output.Depth = inverse_order_preserving_float_map(
+#if !ENABLE_RELIGHTING
+		~
+#endif
+		VS_Depth[InstanceID]
+    );
+
 #if ENABLE_RELIGHTING
-    output.Depth = inverse_order_preserving_float_map(VS_Depth[InstanceID]);
-    output.MR = VS_MetallicRoughness[index];
-	output.Normal = VS_Normal[index];
+    Output.MR = VS_MetallicRoughness[Index];
+	Output.Normal = VS_Normal[Index];
 #endif
 
-    return output;
+    return Output;
 }
 
-struct RTOut
+
+struct FRTOut
 {
     float4 Color : SV_TARGET0;
     
 #if ENABLE_RELIGHTING
     float4 Normal : SV_TARGET1;
     float4 MetallicRoughness : SV_TARGET2;
-    float4 Depth : SV_TARGET3;
+    float Depth : SV_TARGET3;
+#else
+    float Depth : SV_Depth;
 #endif
 
 };
-
  
-RTOut GSSplatting_PS(in OutVertex input)
+FRTOut GSSplatting_PS(FOutVertex Input)
 {
-    RTOut output;
+	FRTOut Output;
 
-    float2 DistanceFromMean = (input.Mean.xy - input.Position.xy);
+    float2 DistanceFromMean = (Input.Mean.xy - Input.Position.xy);
 
-    float Power = dot(input.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
-    float Alpha = exp(Power) * input.Opacity;
+    float Power = dot(Input.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
+    float Alpha = exp(Power) * Input.Opacity;
 
-    //return premultiplied opacity
-	output.Color = float4(input.Color * Alpha, Alpha);
+	Output.Color = float4(Input.Color * Alpha, Alpha);
 
 #if ENABLE_RELIGHTING
-    output.Normal = float4(input.Normal * Alpha, Alpha);
-    output.MetallicRoughness = float4(input.MR * Alpha, 0, Alpha);
-
-    float depthPrem = input.Depth * Alpha;
-    output.Depth = float4(depthPrem, depthPrem, depthPrem, Alpha);
+    Output.Normal = float4(Input.Normal * Alpha, Alpha);
+    Output.MetallicRoughness = float4(Input.MR * Alpha, 0, Alpha);
 #endif
 
-    return output;
+    // For lit splats, will output to depth component of GSplatGBuffer
+	// For unlit splats, only used to test against scene depth and not written to depth buffer
+	// Multiply by 100 to convert to centimetres
+	Output.Depth = ConvertToDeviceZ(100.0f * Input.Depth);
+
+    return Output;
 }

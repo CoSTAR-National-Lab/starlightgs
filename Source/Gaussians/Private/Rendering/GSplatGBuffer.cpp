@@ -21,11 +21,10 @@ void FGSplatGBuffer::Init(FRDGBuilder& GraphBuilder, const FSceneView& InView)
 	const FIntPoint Extent = ViewInfo.ViewRect.Size();
 
 	ETextureCreateFlags Flags = TexCreate_ShaderResource | TexCreate_RenderTargetable;
-	ETextureCreateFlags DepthFlags = TexCreate_ShaderResource | TexCreate_DepthStencilTargetable; // splats dont use Depth stencil at all
-	BaseColorTexture		 = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_FloatRGBA, FClearValueBinding(FLinearColor(0,0,0,0)), Flags), TEXT("GSplatGBuffer.BaseColor"));
-	NormalTexture			 = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_FloatRGBA, FClearValueBinding(FLinearColor(0, 0, 0, 0)), Flags), TEXT("GSplatGBuffer.Normal"));
-	MetallicRoughnessTexture = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_FloatRGBA, FClearValueBinding(FLinearColor(0, 0, 0, 0)), Flags), TEXT("GSplatGBuffer.MetallicRoughness"));
-	DepthTexture			 = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_FloatRGBA, FClearValueBinding(FLinearColor(0, 0, 0, 0)), Flags), TEXT("GSplatGBuffer.Depth"));
+	BaseColorTexture		 = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_FloatRGBA,	FClearValueBinding::Transparent, Flags), TEXT("GSplatGBuffer.BaseColor"));
+	NormalTexture			 = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_FloatRGBA,	FClearValueBinding::Transparent, Flags), TEXT("GSplatGBuffer.Normal"));
+	MetallicRoughnessTexture = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_FloatRGBA,	FClearValueBinding::Transparent, Flags), TEXT("GSplatGBuffer.MetallicRoughness"));
+	DepthTexture			 = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(Extent, PF_R16F,		FClearValueBinding::Transparent, Flags), TEXT("GSplatGBuffer.Depth"));
 }
 
 void FGSplatGBuffer::Clear(FRDGBuilder& GraphBuilder) const
@@ -40,15 +39,13 @@ FRenderTargetBindingSlots FGSplatGBuffer::GetRenderTargetBindings(bool bClear) c
 {
 	check(IsInRenderingThread());
 
-	ERenderTargetLoadAction Action = bClear ? ERenderTargetLoadAction::ELoad : ERenderTargetLoadAction::ELoad;
+	ERenderTargetLoadAction Action = bClear ? ERenderTargetLoadAction::EClear : ERenderTargetLoadAction::ELoad;
 
 	FRenderTargetBindingSlots BindingSlots{ };
 	BindingSlots[0] = FRenderTargetBinding(BaseColorTexture, Action);
 	BindingSlots[1] = FRenderTargetBinding(NormalTexture, Action);
 	BindingSlots[2] = FRenderTargetBinding(MetallicRoughnessTexture, Action);
 	BindingSlots[3] = FRenderTargetBinding(DepthTexture, Action);
-	//BindingSlots.DepthStencil = FDepthStencilBinding(DepthTexture, Action, 
-	//												 ERenderTargetLoadAction::ENoAction, FExclusiveDepthStencil::DepthWrite_StencilNop);
 
 	return BindingSlots;
 }

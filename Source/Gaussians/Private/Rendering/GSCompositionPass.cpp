@@ -80,7 +80,7 @@ void FGSViewExtension::GSCompositionPass(
 	PassParameters->InputViewPort = GetScreenPassTextureViewportParameters(ViewPort);
 	PassParameters->OutputViewPort = GetScreenPassTextureViewportParameters(ViewPort);
 
-	using FCompositionDepthStencilState = TStaticDepthStencilState<true, CF_DepthNear>;
+	using FCompositionDepthStencilState = TStaticDepthStencilState<true, CF_DepthNearOrEqual>;
 
 	AddDrawScreenPass(
 		GraphBuilder,

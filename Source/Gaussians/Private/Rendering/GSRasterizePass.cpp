@@ -72,7 +72,7 @@ class FSplattingPassVS : public FGlobalShader
 	using FPermutationDomain = FSplattingPermutationDomain;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-		RDG_BUFFER_ACCESS(IndirectArgs, ERHIAccess::IndirectArgs)
+		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
 
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float2>, VS_SSPositions)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float4>, VS_SSScale)
@@ -86,8 +86,7 @@ class FSplattingPassVS : public FGlobalShader
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_Depth)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_GaussianIDX)
 
-		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
-
+		RDG_BUFFER_ACCESS(IndirectArgs, ERHIAccess::IndirectArgs)
 	END_SHADER_PARAMETER_STRUCT()
 
 	SHADER_USE_PARAMETER_STRUCT(FSplattingPassVS, FGlobalShader);
@@ -102,6 +101,7 @@ class FSplattingPassPS : public FGlobalShader
 	using FPermutationDomain = FSplattingPermutationDomain;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -115,6 +115,22 @@ BEGIN_SHADER_PARAMETER_STRUCT(FSplattingPassPipelineParameters, )
 	SHADER_PARAMETER_STRUCT_INCLUDE(FSplattingPassVS::FParameters, VertexShader)
 	SHADER_PARAMETER_STRUCT_INCLUDE(FSplattingPassPS::FParameters, PixelShader)
 END_SHADER_PARAMETER_STRUCT()
+
+
+// Static blend / stencil states
+
+using FRelitBlendState = TStaticBlendState<
+	/* Color:  */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
+	/* Normal: */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
+	/* PBR:    */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
+	/* Depth:  */ CW_RED, BO_Max, BF_One, BF_One, BO_Add, BF_One, BF_One
+>;
+using FUnlitBlendState = TStaticBlendState<
+	CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha
+>;
+
+using FRelitDepthStencilState = TStaticDepthStencilState<false, CF_Always>;
+using FUnlitDepthStencilState = TStaticDepthStencilState<false, CF_DepthNearOrEqual>;
 
 
 void FGSViewExtension::GaussianSplattingPass(
@@ -230,16 +246,6 @@ void FGSViewExtension::GaussianSplattingPass(
 		GaussianDepthBuffer = InKeys[Index];
 	}
 
-	static FRHIBlendState* RelitBlendState = TStaticBlendState<
-		CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
-		CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
-		CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
-		CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One
-	>::GetRHI();
-	static FRHIBlendState* UnlitBlendState = TStaticBlendState<
-		CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha
-	>::GetRHI();
-
 	// Rasterize splats into the render target
 	{
 		auto PassParameters = GraphBuilder.AllocParameters<FSplattingPassPipelineParameters>();
@@ -260,16 +266,15 @@ void FGSViewExtension::GaussianSplattingPass(
 
 		PassParameters->VertexShader.IndirectArgs = IndirectArgsBuffer;
 
+		PassParameters->PixelShader.View = InView.ViewUniformBuffer;
 		// TODO: Verify quantity of render targets based on whether relighting is enabled or not
 		PassParameters->PixelShader.RenderTargets = RenderTargets;
-
-		FRHIBlendState* BlendState = bRelighting ? RelitBlendState : UnlitBlendState;
 
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("GSRasterizePass"),
 			PassParameters,
 			ERDGPassFlags::Raster,
-			[PassParameters, VertexShader, PixelShader, BlendState, ViewRect = ViewInfo.ViewRect](FRHICommandList& RHICmdList)
+			[bRelighting, PassParameters, VertexShader, PixelShader, ViewRect = ViewInfo.ViewRect](FRHICommandList& RHICmdList)
 			{
 				RHICmdList.SetViewport(ViewRect.Min.X, ViewRect.Min.Y, 0.0f, ViewRect.Max.X, ViewRect.Max.Y, 1.0f);
 
@@ -277,12 +282,10 @@ void FGSViewExtension::GaussianSplattingPass(
 				FGraphicsPipelineStateInitializer GraphicsPSOInit;
 				RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
 
-				//CW_RGB, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha,
-
 				// Set up blend/depth/rasterizer states
-				GraphicsPSOInit.BlendState = BlendState;
+				GraphicsPSOInit.BlendState = bRelighting ? FRelitBlendState::GetRHI() : FUnlitBlendState::GetRHI();
 				GraphicsPSOInit.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
-				GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+				GraphicsPSOInit.DepthStencilState = bRelighting ? FRelitDepthStencilState::GetRHI() : FUnlitDepthStencilState::GetRHI();
 
 				// Set shaders
 				GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI = GEmptyVertexDeclaration.VertexDeclarationRHI; //using SV_VertexID
