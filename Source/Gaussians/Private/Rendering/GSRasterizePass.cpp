@@ -1,0 +1,308 @@
+#include "GSViewExtension.h"
+#include "GaussianSplatResource.h"
+#include "GaussianSplatSceneProxy.h"
+
+#include "RenderGraphBuilder.h"
+#include "RenderGraphUtils.h"
+#include "RendererInterface.h"
+#include "RendererClasses.h"
+#include "ScreenPass.h"
+#include "ScenePrivate.h"
+
+#include "Rendering/GPURadixSort.h"
+
+
+static TAutoConsoleVariable<int32> CVarGaussiansMaxSplats(
+	TEXT("r.Gaussians.MaxSplats"),
+	5'000'000,
+	TEXT("The maximum number of splats that can be rendered in a single frame."),
+	ECVF_RenderThreadSafe
+);
+
+
+class FPermutationEnableRelighting : SHADER_PERMUTATION_BOOL("ENABLE_RELIGHTING");
+using FSplattingPermutationDomain = TShaderPermutationDomain<FPermutationEnableRelighting>;
+
+class FGSPrepassCS : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FGSPrepassCS)
+	SHADER_USE_PARAMETER_STRUCT(FGSPrepassCS, FGlobalShader);
+
+	using FPermutationDomain = FSplattingPermutationDomain;
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+		SHADER_PARAMETER_STRUCT_REF(FGaussianSplatShaderResources, GSResource)
+		SHADER_PARAMETER_STRUCT_REF(FPrimitiveUniformShaderParameters, Primitive)
+
+		// Out
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint32>, Counter)
+		
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float2>, OutSSPositions)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float4>, OutSSScale)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutConic)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float4>, OutColorOpacity)
+
+		// Only used when relighting is enabled
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutNormal)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float2>, OutMR)
+
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutDepth)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutGaussianIDX)
+
+		SHADER_PARAMETER(uint32, BufferCapacity)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("THREADGROUP_SIZE_1D"), GetThreadGroupSize1D());
+	}
+
+	static uint32 GetThreadGroupSize1D() { return 256; }
+};
+
+IMPLEMENT_GLOBAL_SHADER(FGSPrepassCS, "/Plugin/Gaussians/GSCompute.usf", "GSPrepass", SF_Compute);
+
+
+class FSplattingPassVS : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSplattingPassVS)
+
+	using FPermutationDomain = FSplattingPermutationDomain;
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		RDG_BUFFER_ACCESS(IndirectArgs, ERHIAccess::IndirectArgs)
+
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float2>, VS_SSPositions)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float4>, VS_SSScale)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float3>, VS_Conic)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float4>, VS_ColorOpacity)
+
+		// Only used when relighting is enabled
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float2>, VS_MetallicRoughness)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(RWStructuredBuffer<float3>, VS_Normal)
+
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_Depth)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_GaussianIDX)
+
+		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+
+	END_SHADER_PARAMETER_STRUCT()
+
+	SHADER_USE_PARAMETER_STRUCT(FSplattingPassVS, FGlobalShader);
+};
+
+IMPLEMENT_GLOBAL_SHADER(FSplattingPassVS, "/Plugin/Gaussians/GSCompute.usf", "GSSplatting_VS", SF_Vertex);
+
+class FSplattingPassPS : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSplattingPassPS)
+
+	using FPermutationDomain = FSplattingPermutationDomain;
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
+
+	SHADER_USE_PARAMETER_STRUCT(FSplattingPassPS, FGlobalShader);
+};
+
+IMPLEMENT_GLOBAL_SHADER(FSplattingPassPS, "/Plugin/Gaussians/GSCompute.usf", "GSSplatting_PS", SF_Pixel);
+
+
+BEGIN_SHADER_PARAMETER_STRUCT(FSplattingPassPipelineParameters, )
+	SHADER_PARAMETER_STRUCT_INCLUDE(FSplattingPassVS::FParameters, VertexShader)
+	SHADER_PARAMETER_STRUCT_INCLUDE(FSplattingPassPS::FParameters, PixelShader)
+END_SHADER_PARAMETER_STRUCT()
+
+
+void FGSViewExtension::GaussianSplattingPass(
+	FRDGBuilder& GraphBuilder, 
+	const FSceneView& InView,
+	const FRenderTargetBindingSlots& RenderTargets,
+	const TSet<FGaussianSplatSceneProxy*>& Proxies)
+{
+	// Don't call this when there are no proxies
+	check(!Proxies.IsEmpty());
+	bool bRelighting = (*Proxies.FindArbitraryElement())->SupportsRelighting();
+
+	check(InView.bIsViewInfo);
+	const FViewInfo& ViewInfo = static_cast<const FViewInfo&>(InView);
+
+	// Create transient buffers
+	int32 Capacity = CVarGaussiansMaxSplats.GetValueOnRenderThread();
+
+	FRDGBufferRef IndirectArgsBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateIndirectDesc<FRHIDrawIndirectParameters>(), TEXT("Gaussians.IndirectArgs"));
+	FRDGBufferRef NDCPositionsBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(FVector2f), Capacity), TEXT("Gaussians.NDCPositions"));
+	FRDGBufferRef NDCScalesBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(FVector4f), Capacity), TEXT("Gaussians.NDCScales"));
+	FRDGBufferRef ConicsBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), Capacity), TEXT("Gaussians.Conics"));
+	FRDGBufferRef ColorOpacityBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(FVector4f), Capacity), TEXT("Gaussians.ColorOpacity"));
+
+	FRDGBufferRef GaussianIndexBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity), TEXT("Gaussians.GaussianIDX"));
+	FRDGBufferRef GaussianDepthBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity), TEXT("Gaussians.Depth"));
+
+	// Optional buffers - only in use when relighting enabled
+	FRDGBufferRef NormalBuffer = nullptr;
+	FRDGBufferRef MetallicRoughnessBuffer = nullptr;
+	if (bRelighting)
+	{
+		NormalBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), Capacity), TEXT("Gaussians.Normal"));
+		MetallicRoughnessBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(FVector2f), Capacity), TEXT("Gaussians.MR"));
+	}
+
+	// Clear Indirect ARGS
+	// Vertex count per instance will be set by dispatch thread 0
+	AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(IndirectArgsBuffer, PF_R32_UINT), 0);
+
+	const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());
+
+	FSplattingPermutationDomain Permutation;
+	Permutation.Set<FPermutationEnableRelighting>(bRelighting);
+
+	TShaderMapRef<FGSPrepassCS> PrePassShader(ShaderMap, Permutation);
+	TShaderMapRef<FSplattingPassVS> VertexShader(ShaderMap, Permutation);
+	TShaderMapRef<FSplattingPassPS> PixelShader(ShaderMap, Permutation);
+
+	for (auto Proxy : Proxies)
+	{
+		FGaussianSplatResource* Resource = Proxy->GetResource_RenderThread();
+
+		auto SplatCount  = Resource->GetSplatCount();
+		INC_DWORD_STAT_BY(STAT_SplatsRendered, SplatCount)
+
+		TUniformBufferRef<FGaussianSplatShaderResources> ResourceUniformBuffer = TUniformBufferRef<FGaussianSplatShaderResources>{ Resource->GetUniformBuffer() };
+		TUniformBufferRef<FPrimitiveUniformShaderParameters> PrimitiveUniformBuffer = TUniformBufferRef<FPrimitiveUniformShaderParameters>{ Proxy->GetUniformBuffer() };
+
+		auto Parameters = GraphBuilder.AllocParameters<FGSPrepassCS::FParameters>();
+
+		Parameters->View = InView.ViewUniformBuffer;
+		Parameters->GSResource = ResourceUniformBuffer;
+		Parameters->Primitive = PrimitiveUniformBuffer;
+
+		Parameters->Counter = GraphBuilder.CreateUAV(IndirectArgsBuffer, PF_R32_UINT);
+
+		Parameters->OutSSPositions = GraphBuilder.CreateUAV(NDCPositionsBuffer, PF_G32R32F);
+		Parameters->OutSSScale = GraphBuilder.CreateUAV(NDCScalesBuffer, PF_A32B32G32R32F);
+		Parameters->OutConic = GraphBuilder.CreateUAV(ConicsBuffer);
+		Parameters->OutColorOpacity = GraphBuilder.CreateUAV(ColorOpacityBuffer, PF_A32B32G32R32F);
+		Parameters->OutGaussianIDX = GraphBuilder.CreateUAV(GaussianIndexBuffer, PF_R32_UINT);
+		Parameters->OutDepth = GraphBuilder.CreateUAV(GaussianDepthBuffer, PF_R32_UINT);
+
+		if (bRelighting)
+		{
+			Parameters->OutNormal = GraphBuilder.CreateUAV(NormalBuffer);
+			Parameters->OutMR = GraphBuilder.CreateUAV(MetallicRoughnessBuffer, PF_G32R32F);
+		}
+
+		Parameters->BufferCapacity = Capacity;
+
+		FIntVector DispatchSize = FComputeShaderUtils::GetGroupCount(SplatCount, FGSPrepassCS::GetThreadGroupSize1D());
+
+		FComputeShaderUtils::AddPass<FGSPrepassCS>(
+			GraphBuilder,
+			RDG_EVENT_NAME("GSPrepass"),
+			PrePassShader,
+			Parameters,
+			DispatchSize
+		);
+	}
+
+	// Sort all projected screens-space splats along view axis
+	{
+		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Radix Sort");
+
+		TArray<FRDGBufferRef> InKeys   = { GaussianDepthBuffer, GraphBuilder.CreateBuffer(GaussianDepthBuffer->Desc, TEXT("Gaussians.PingPongDepth")) };
+		TArray<FRDGBufferRef> InValues = { GaussianIndexBuffer, GraphBuilder.CreateBuffer(GaussianIndexBuffer->Desc, TEXT("Gaussians.PingPongIDX")) };
+
+		uint32 Index = GPURadixSort::SortBufferIndirect(
+			GraphBuilder, 
+			InKeys,
+			InValues, 
+			0,
+			IndirectArgsBuffer,
+			1,
+			UINT32_MAX, 
+			GMaxRHIFeatureLevel
+		);
+
+		GaussianIndexBuffer = InValues[Index];
+		GaussianDepthBuffer = InKeys[Index];
+	}
+
+	static FRHIBlendState* RelitBlendState = TStaticBlendState<
+		CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
+		CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
+		CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
+		CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One
+	>::GetRHI();
+	static FRHIBlendState* UnlitBlendState = TStaticBlendState<
+		CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha
+	>::GetRHI();
+
+	// Rasterize splats into the render target
+	{
+		auto PassParameters = GraphBuilder.AllocParameters<FSplattingPassPipelineParameters>();
+
+		PassParameters->VertexShader.View = InView.ViewUniformBuffer;
+		PassParameters->VertexShader.VS_SSPositions = GraphBuilder.CreateSRV(NDCPositionsBuffer, PF_G32R32F);
+		PassParameters->VertexShader.VS_SSScale = GraphBuilder.CreateSRV(NDCScalesBuffer, PF_A32B32G32R32F);
+		PassParameters->VertexShader.VS_Conic = GraphBuilder.CreateSRV(ConicsBuffer);
+		PassParameters->VertexShader.VS_ColorOpacity = GraphBuilder.CreateSRV(ColorOpacityBuffer, PF_A32B32G32R32F);
+		PassParameters->VertexShader.VS_GaussianIDX = GraphBuilder.CreateSRV(GaussianIndexBuffer, PF_R32_UINT);
+		PassParameters->VertexShader.VS_Depth = GraphBuilder.CreateSRV(GaussianDepthBuffer, PF_R32_UINT);
+
+		if (bRelighting)
+		{
+			PassParameters->VertexShader.VS_Normal = GraphBuilder.CreateSRV(NormalBuffer);
+			PassParameters->VertexShader.VS_MetallicRoughness = GraphBuilder.CreateSRV(MetallicRoughnessBuffer, PF_G32R32F);
+		}
+
+		PassParameters->VertexShader.IndirectArgs = IndirectArgsBuffer;
+
+		// TODO: Verify quantity of render targets based on whether relighting is enabled or not
+		PassParameters->PixelShader.RenderTargets = RenderTargets;
+
+		FRHIBlendState* BlendState = bRelighting ? RelitBlendState : UnlitBlendState;
+
+		GraphBuilder.AddPass(
+			RDG_EVENT_NAME("GSRasterizePass"),
+			PassParameters,
+			ERDGPassFlags::Raster,
+			[PassParameters, VertexShader, PixelShader, BlendState, ViewRect = ViewInfo.ViewRect](FRHICommandList& RHICmdList)
+			{
+				RHICmdList.SetViewport(ViewRect.Min.X, ViewRect.Min.Y, 0.0f, ViewRect.Max.X, ViewRect.Max.Y, 1.0f);
+
+				// Initialize the Pipeline State
+				FGraphicsPipelineStateInitializer GraphicsPSOInit;
+				RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
+
+				//CW_RGB, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha,
+
+				// Set up blend/depth/rasterizer states
+				GraphicsPSOInit.BlendState = BlendState;
+				GraphicsPSOInit.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
+				GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+
+				// Set shaders
+				GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI = GEmptyVertexDeclaration.VertexDeclarationRHI; //using SV_VertexID
+				GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = PixelShader.GetPixelShader();
+				GraphicsPSOInit.PrimitiveType = PT_TriangleList;
+
+				SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit, 0);
+
+				// Set shader parameters
+				SetShaderParameters(RHICmdList, VertexShader, VertexShader.GetVertexShader(), PassParameters->VertexShader);
+				SetShaderParameters(RHICmdList, PixelShader, PixelShader.GetPixelShader(), PassParameters->PixelShader);
+
+				// Execute the Indirect Draw
+				// The RHI needs the actual underlying FRHIBuffer for the indirect call
+				FRHIBuffer* IndirectArgsRHIBuffer = PassParameters->VertexShader.IndirectArgs->GetIndirectRHICallBuffer();
+				uint32 ArgumentOffset = 0; // Offset in bytes if your buffer contains multiple draw args
+
+				RHICmdList.DrawPrimitiveIndirect(IndirectArgsRHIBuffer, ArgumentOffset);
+			}
+		);
+	}
+}

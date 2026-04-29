@@ -32,39 +32,32 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 	const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
 	// Process relightable proxies
-	RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Lit");
-
-	if (RelightableProxies.IsEmpty())
+	if (!RelightableProxies.IsEmpty())
 	{
-		return;
+		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Lit");
+
+		FGSplatGBuffer GSplatGBuffer;
+		GSplatGBuffer.Init(GraphBuilder, InView);
+		GSplatGBuffer.Clear(GraphBuilder);
+
+		GaussianSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(), RelightableProxies);
+		GSCompositionPass(GraphBuilder, InView, GSplatGBuffer);
 	}
-
-	GSplatGBuffer.Init(GraphBuilder, InView);
-
-	// RenderGraph doesn't recreate the resource every frame, so we need to clear it manually
-	GSplatGBuffer.Clear(GraphBuilder);
-	
-	GSPrePass(GraphBuilder, InView, RelightableProxies);
-	// TODO: Once GSPrePass and GSSplattingPass are combined, bRelighting can be deduced from proxies passed in
-	GSSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(), true);
-
-	GSCompositionPass(GraphBuilder, InView);
 }
 
 void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& InView,
 	const FPostProcessingInputs& Inputs)
 {
 	// Render all splats that don't support relighting
-	RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Unlit");
-
 	if (!NonRelightableProxies.IsEmpty())
 	{
-		GSPrePass(GraphBuilder, InView, NonRelightableProxies);
+		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Unlit");
+		FRDGTextureRef SceneColorTexture = Inputs.SceneTextures->GetContents()->SceneColorTexture;
 
 		FRenderTargetBindingSlots RenderTargets{};
-		RenderTargets[0] = FRenderTargetBinding{ Inputs.SceneTextures->GetContents()->SceneColorTexture, ERenderTargetLoadAction::ELoad };
-		// TODO: Once GSPrePass and GSSplattingPass are combined, bRelighting can be deduced from proxies passed in
-		GSSplattingPass(GraphBuilder, InView, RenderTargets, false);
+		RenderTargets[0] = FRenderTargetBinding{ SceneColorTexture, ERenderTargetLoadAction::ELoad };
+
+		GaussianSplattingPass(GraphBuilder, InView, RenderTargets, NonRelightableProxies);
 	}
 }
 
@@ -74,7 +67,7 @@ bool FGSViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionConte
 	return Context.GetWorld() == OwningSubsystem->GetWorld();
 }
 
-void FGSViewExtension::RegisterProxy(class FGaussianSplatSceneProxy* Proxy)
+void FGSViewExtension::RegisterProxy(FGaussianSplatSceneProxy* Proxy)
 {
 	if (Proxy->SupportsRelighting())
 	{
@@ -88,7 +81,7 @@ void FGSViewExtension::RegisterProxy(class FGaussianSplatSceneProxy* Proxy)
 	}
 }
 
-void FGSViewExtension::UnregisterProxy(class FGaussianSplatSceneProxy* Proxy)
+void FGSViewExtension::UnregisterProxy(FGaussianSplatSceneProxy* Proxy)
 {
 	if (Proxy->SupportsRelighting())
 	{

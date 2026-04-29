@@ -179,15 +179,18 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 	    OutSSScale[Idx] = float4(MajorAxisMultiplier, MinorAxisMultiplier);
         OutConic[Idx] = Conic;
         
-        OutDepth[Idx] = order_preserving_float_map(ViewPosition.z);
         OutGaussianIDX[Idx] = Idx;
         OutColorOpacity[Idx].xyz = GSResources.SHAndOpacities[DispatchThreadId.x].xyz; 
         OutColorOpacity[Idx].a = GSResources.SHAndOpacities[DispatchThreadId.x].a;
 #if ENABLE_RELIGHTING
+        OutDepth[Idx] = order_preserving_float_map(ViewPosition.z);
         OutNormal[Idx] = mul((float3x3) Primitive.RelativeWorldToLocal, GSResources.Normals[DispatchThreadId.x]);
         OutMR[Idx] = GSResources.MetallicRoughness[DispatchThreadId.x];
+#else
+        // Unlit splats use opposite blending function. This is to be able to draw directly into scene colour texture and avoid an intermediate render target
+        OutDepth[Idx] = ~order_preserving_float_map(ViewPosition.z);
 #endif
-    }
+	}
 	else
 	{
 		uint Dummy;
@@ -204,15 +207,15 @@ Buffer<float4> VS_ColorOpacity;
 #if ENABLE_RELIGHTING
 Buffer<float2> VS_MetallicRoughness;
 StructuredBuffer<float3> VS_Normal;
+Buffer<uint> VS_Depth;
 #endif
 
-Buffer<uint> VS_Depth;
 Buffer<uint> VS_GaussianIDX;
 
 struct OutVertex
 {
 	float4 Position : SV_POSITION;
-    //float2 UVCoord : TEXCOORD0;
+	float2 Mean : MEAN;
 
     float3 Color : COLOR;
 	float3 Conic : CONIC;
@@ -223,12 +226,6 @@ struct OutVertex
     float2 MR : METALLICROUGHNESS;
     float3 Normal : NORMAL_MEAN;
 #endif
-
-	float2 Mean : MEAN;
-	
-	//float3 out_wsPos : SV_WSPOS;
-	//float out_depth : SV_DEPTH;
-	//float2 metallicRoughness : SV_METALLICROUGHNESS;
 };
 
 OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint InstanceID : SV_InstanceID )
@@ -253,8 +250,6 @@ OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint Instance
     float3 Conic = VS_Conic[index];
 	output.Conic = float3(-0.5 * Conic.x, -Conic.y, -0.5 * Conic.z);
 
-    //output.UVCoord = (Quad[GlobalVertexId] + 1) * 0.5;
-
     float4 QuadScale = VS_SSScale[index];
     float2 ScreenSpacePos = VS_SSPositions[index];
     float2 Vertex = Quad[GlobalVertexId];
@@ -262,7 +257,6 @@ OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint Instance
 	output.Mean = float2((float2(ScreenSpacePos.x, -ScreenSpacePos.y) + 1) * 0.5 * PrimaryView.ViewSizeAndInvSize.xy);
     output.Position = float4(ScreenSpacePos.xy + (Vertex.x * QuadScale.zw + Vertex.y * QuadScale.xy), 0, 1);
     
-
 #if ENABLE_RELIGHTING
     output.Depth = inverse_order_preserving_float_map(VS_Depth[InstanceID]);
     output.MR = VS_MetallicRoughness[index];
@@ -275,6 +269,7 @@ OutVertex GSSplatting_VS( in uint GlobalVertexId : SV_VertexID, in uint Instance
 struct RTOut
 {
     float4 Color : SV_TARGET0;
+    
 #if ENABLE_RELIGHTING
     float4 Normal : SV_TARGET1;
     float4 MetallicRoughness : SV_TARGET2;
@@ -296,21 +291,12 @@ RTOut GSSplatting_PS(in OutVertex input)
     //return premultiplied opacity
 	output.Color = float4(input.Color * Alpha, Alpha);
 
-   
-
 #if ENABLE_RELIGHTING
-	//return float4(input.UVCoord, 0, 1);
-    //
-    //gPosition = vec4(out_wsPos, 1.0) * g;
     output.Normal = float4(input.Normal * Alpha, Alpha);
     output.MetallicRoughness = float4(input.MR * Alpha, 0, Alpha);
 
     float depthPrem = input.Depth * Alpha;
     output.Depth = float4(depthPrem, depthPrem, depthPrem, Alpha);
-    //dummy values
-    //output.Normal = float3(0, 0, 1);
-    //output.Depth = 1;
-    //output.MetallicRoughness = float2(1,0);
 #endif
 
     return output;

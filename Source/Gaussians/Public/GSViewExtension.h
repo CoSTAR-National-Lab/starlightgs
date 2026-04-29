@@ -31,13 +31,22 @@ public:
 	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
 
 private:
-	//Rasterization Pipeline // rendering into scene texture to begin with as a post process. later can do
-	// TODO: Will be combined into single function to avoid storing transient buffers as class members
-	void GSPrePass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const TSet<FGaussianSplatSceneProxy*>& Proxies);
-	void GSSplattingPass(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, bool bRelighting);
+	// Renders all splats in given proxies into supplied render targets.
+	// Will determine from the proxies if relighting is supported (all proxies must have the same support for relighting)
+	// If relighting is supported, supply a GSplatGBuffer to render into. Otherwise, supply the scene depth stencil
+	static void GaussianSplattingPass(
+		FRDGBuilder& GraphBuilder, 
+		const FSceneView& InView, 
+		const FRenderTargetBindingSlots& RenderTargets, 
+		const TSet<FGaussianSplatSceneProxy*>& Proxies
+	);
 
 	// Composite splat buffer with GBuffer
-	void GSCompositionPass(FRDGBuilder& GraphBuilder, const FSceneView& InView);
+	static void GSCompositionPass(
+		FRDGBuilder& GraphBuilder, 
+		const FSceneView& InView, 
+		const FGSplatGBuffer& GSplatGBuffer
+	);
 
 public:
 	void RegisterProxy(FGaussianSplatSceneProxy* Proxy);
@@ -47,10 +56,6 @@ private:
 	// Relit and unlit splats are kept separate as they are rendered in different passes
 	TSet<FGaussianSplatSceneProxy*> RelightableProxies;
 	TSet<FGaussianSplatSceneProxy*> NonRelightableProxies;
-
-	// TODO: Will remove transient resources from class members
-	TMap<FName, FRDGBufferRef> TransientBuffers;
-	FGSplatGBuffer GSplatGBuffer;
 
 	UWorldSubsystem* OwningSubsystem;
 };

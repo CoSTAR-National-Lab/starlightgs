@@ -43,7 +43,8 @@ IMPLEMENT_GLOBAL_SHADER(FGSCompositionPS, "/Plugin/Gaussians/GSplatComposition.u
 
 void FGSViewExtension::GSCompositionPass(
 	FRDGBuilder& GraphBuilder, 
-	const FSceneView& InView
+	const FSceneView& InView,
+	const FGSplatGBuffer& GSplatGBuffer
 )
 {
 	check(IsInRenderingThread());
