@@ -38,7 +38,11 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 
 		FGSplatGBuffer GSplatGBuffer;
 		GSplatGBuffer.Init(GraphBuilder, InView);
-		GSplatGBuffer.Clear(GraphBuilder);
+
+		{
+			RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Clear GSplatGBuffer");
+			GSplatGBuffer.Clear(GraphBuilder);
+		}
 
 		GaussianSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(), RelightableProxies);
 		GSCompositionPass(GraphBuilder, InView, GSplatGBuffer);

@@ -11,7 +11,9 @@ SCREEN_PASS_TEXTURE_VIEWPORT(OutputViewPort)
 Texture2D<float4> GSplatBaseColor;
 Texture2D<float4> GSplatNormal;
 Texture2D<float4> GSplatMetallicRoughness;
-Texture2D<float4>  GSplatDepth;
+Texture2D<float>  GSplatDepth;
+
+float AlphaThreshold;
 
 
 void GSplatCompositionPS(
@@ -53,20 +55,19 @@ void GSplatCompositionPS(
 	, out float OutDepth : SV_Depth
 )
 {
-	const float3 BaseColor = GSplatBaseColor.Sample(View.SharedBilinearClampedSampler, InUV).rgb;
+	const float4 BaseColor = GSplatBaseColor.Sample(View.SharedBilinearClampedSampler, InUV).rgba;
 	const float3 WorldSpaceNormal = normalize(GSplatNormal.Sample(View.SharedBilinearClampedSampler, InUV).rgb);
 	const float2 MetallicRoughness = GSplatMetallicRoughness.Sample(View.SharedBilinearClampedSampler, InUV).rg;
 
 	const float DeviceZ = GSplatDepth.Sample(View.SharedPointClampedSampler, InUV).r;
-	//const float DeviceZ = ConvertToDeviceZ(Depth);
 
 	// Encode into GBuffer data
 	FGBufferData GBufferData = (FGBufferData) 0;
 	GBufferData.Depth = DeviceZ;
 	GBufferData.WorldNormal = WorldSpaceNormal;
-	GBufferData.DiffuseColor = BaseColor;
+	GBufferData.DiffuseColor = BaseColor.rgb;
 	GBufferData.SpecularColor = 0.0f;
-	GBufferData.BaseColor = BaseColor;
+	GBufferData.BaseColor = BaseColor.rgb;
 	GBufferData.Metallic = MetallicRoughness.r;
 	GBufferData.Specular = 0.0f;
 	GBufferData.Roughness = MetallicRoughness.g;
@@ -78,7 +79,7 @@ void GSplatCompositionPS(
 	FPixelShaderOut PSOut;
 	EncodeGBufferToMRT(PSOut, GBufferData, /* QuantizationBias = */0.0f);
 	
-	OutDepth = GBufferData.Depth;
+	OutDepth = BaseColor.a >= AlphaThreshold ? GBufferData.Depth : 0.0f;
 
 #if PIXELSHADEROUTPUT_MRT0
 	OutTarget0 = PSOut.MRT[0];
