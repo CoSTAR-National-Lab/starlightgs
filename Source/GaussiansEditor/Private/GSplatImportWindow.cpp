@@ -335,6 +335,31 @@ void SGSplatImportWindow::Construct(const FArguments& InArgs)
 			.Padding(2.0f)
 			[
 				SNew(STextBlock)
+				.Text(LOCTEXT("ConvertSHCheckBoxLabel", "Base Colour is RGB"))
+			]
+			+ SHorizontalBox::Slot()
+			.VAlign(VAlign_Center)
+			.HAlign(HAlign_Right)
+			.AutoWidth()
+			.Padding(2.0f)
+			[
+				SAssignNew(BaseColorRGBCheckBox, SCheckBox)
+				.ToolTipText(LOCTEXT("ConvertSHCheckBoxTooltip", "Check if the original PLY file has encoded base colour in RGB (as opposed to SH coefficients)."))
+				.IsChecked(ImportData->bBaseColorIsRGB ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+			]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(2)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.VAlign(VAlign_Center)
+			.HAlign(HAlign_Right)
+			.AutoWidth()
+			.Padding(2.0f)
+			[
+				SNew(STextBlock)
 				.Text(LOCTEXT("ApplyGammaCorrectionCheckBoxLabel", "Apply Gamma Correction"))
 			]
 			+ SHorizontalBox::Slot()
@@ -389,6 +414,11 @@ bool SGSplatImportWindow::ShouldImportHighOrderSH() const
 bool SGSplatImportWindow::ShouldImportMetallicRoughness() const
 {
 	return ImportMetallicRoughnessCheckBox->IsChecked();
+}
+
+bool SGSplatImportWindow::GetBaseColorIsRGB() const
+{
+	return BaseColorRGBCheckBox->IsChecked();
 }
 
 bool SGSplatImportWindow::GetApplyGammaCorrection() const

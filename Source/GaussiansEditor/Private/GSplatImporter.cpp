@@ -316,11 +316,19 @@ bool GSplatImporter::ImportPly(const UGSplatImportData& ImportData, happly::PLYD
 
 		if (bHasZeroOrderSH)
 		{
-			// * 0.282095 + 0.5 to RGB
-
-			sho[i].X = dc_x[i]	* 0.28209479177387814f + 0.5f;
-			sho[i].Y = dc_y[i]	* 0.28209479177387814f + 0.5f;
-			sho[i].Z = dc_z[i]	* 0.28209479177387814f + 0.5f;
+			if (ImportData.bBaseColorIsRGB)
+			{
+				sho[i].X = dc_x[i];
+				sho[i].Y = dc_y[i];
+				sho[i].Z = dc_z[i];
+			}
+			else
+			{
+				// * 0.282095 + 0.5 to RGB
+				sho[i].X = dc_x[i] * 0.28209479177387814f + 0.5f;
+				sho[i].Y = dc_y[i] * 0.28209479177387814f + 0.5f;
+				sho[i].Z = dc_z[i] * 0.28209479177387814f + 0.5f;
+			}	
 		}
 		else
 		{

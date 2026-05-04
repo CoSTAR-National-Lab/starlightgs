@@ -31,6 +31,7 @@ struct GAUSSIANS_API FGaussianSplatData
 	TArray<FVector3f> Scales;
 
 	// Spherical Harmonics coefficients - Zero order (f_dc_0, f_dc_1, f_dc_2)
+	// TODO: We now convert from SH representation to RGB on import. This field should be renamed to reflect that
 	UPROPERTY()
 	TArray<FVector4f> ZeroOrderHarmonicsCoefficientsAndOpacities;
 

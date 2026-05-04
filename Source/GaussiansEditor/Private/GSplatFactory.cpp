@@ -71,6 +71,7 @@ static bool ShowGSplatImportWindow(const FString& Filename, UGSplatImportData* I
 
 	GSplatOptionWindow->GetImportSwizzle(ImportData->Swizzle);
 
+	ImportData->bBaseColorIsRGB = GSplatOptionWindow->GetBaseColorIsRGB();
 	ImportData->bApplyGammaCorrection = GSplatOptionWindow->GetApplyGammaCorrection();
 
 	return GSplatOptionWindow->ShouldImport();

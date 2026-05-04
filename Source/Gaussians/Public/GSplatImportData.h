@@ -48,6 +48,10 @@ public:
 	UPROPERTY()
 	float ScaleFactor = 100.0f;
 
+	// True if the base colour in the original PLY file is already in RGB (to know when to avoid transforming from SH representation to RGB)
+	UPROPERTY()
+	bool bBaseColorIsRGB = false;
+
 	UPROPERTY()
 	bool bApplyGammaCorrection = false;
 
