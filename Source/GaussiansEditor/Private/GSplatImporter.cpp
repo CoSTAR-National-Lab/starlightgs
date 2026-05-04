@@ -1,4 +1,5 @@
 #include "GSplatImporter.h"
+#include "GSplatImportData.h"
 #include "GSplatFactory.h"
 
 #if WITH_EDITOR
@@ -9,12 +10,12 @@
 #include <happly.h>
 
 
-bool FGSplatImportData::ParsePly(const FString& Filename, FGSplatImportData& ImportData)
+bool GSplatImporter::ParsePly(const FString& Filename, UGSplatImportData& ImportData, happly::PLYData** OutPlyData)
 {
 	try
 	{
 		std::string file = std::string(TCHAR_TO_UTF8(*Filename));
-		ImportData.PlyData = new happly::PLYData(file);
+		*OutPlyData = new happly::PLYData(file);
 	}
 	catch (std::runtime_error e)
 	{
@@ -22,8 +23,8 @@ bool FGSplatImportData::ParsePly(const FString& Filename, FGSplatImportData& Imp
 			return false;
 	}
 
-	check(ImportData.PlyData);
-	happly::PLYData& ply = *ImportData.PlyData;
+	check(*OutPlyData);
+	happly::PLYData& ply = **OutPlyData;
 
 	// Check ply has required data
 	if (!ply.hasElement("vertex"))
@@ -109,8 +110,9 @@ float SwizzleComponent(float InX, float InY, float InZ, EGSplatSwizzleAxis Swizz
 	return 0.0f;
 }
 
-FVector3f SwizzleVector(float InX, float InY, float InZ, const TStaticArray<EGSplatSwizzleAxis, 3>& Swizzle)
+FVector3f SwizzleVector(float InX, float InY, float InZ, const TArray<EGSplatSwizzleAxis>& Swizzle)
 {
+	check(Swizzle.Num() == 3);
 	return {
 		SwizzleComponent(InX, InY, InZ, Swizzle[0]),
 		SwizzleComponent(InX, InY, InZ, Swizzle[1]),
@@ -118,8 +120,9 @@ FVector3f SwizzleVector(float InX, float InY, float InZ, const TStaticArray<EGSp
 	};
 }
 
-FVector3f SwizzleVector(const FVector3f& V, const TStaticArray<EGSplatSwizzleAxis, 3>& Swizzle)
+FVector3f SwizzleVector(const FVector3f& V, const TArray<EGSplatSwizzleAxis>& Swizzle)
 {
+	check(Swizzle.Num() == 3);
 	return {
 		SwizzleComponent(V.X, V.Y, V.Z, Swizzle[0]),
 		SwizzleComponent(V.X, V.Y, V.Z, Swizzle[1]),
@@ -143,8 +146,9 @@ float SwizzleComponentAbs(float InX, float InY, float InZ, EGSplatSwizzleAxis Sw
 	return 0.0f;
 }
 
-FVector3f SwizzleVectorAbs(float InX, float InY, float InZ, const TStaticArray<EGSplatSwizzleAxis, 3>& Swizzle)
+FVector3f SwizzleVectorAbs(float InX, float InY, float InZ, const TArray<EGSplatSwizzleAxis>& Swizzle)
 {
+	check(Swizzle.Num() == 3);
 	return {
 		SwizzleComponentAbs(InX, InY, InZ, Swizzle[0]),
 		SwizzleComponentAbs(InX, InY, InZ, Swizzle[1]),
@@ -168,8 +172,9 @@ FVector3f UnitVectorForAxis(EGSplatSwizzleAxis Axis)
 	return FVector3f::ZeroVector;
 }
 
-FVector4f SwizzleQuaternion(float InX, float InY, float InZ, float InW, const TStaticArray<EGSplatSwizzleAxis, 3>& Swizzle)
+FVector4f SwizzleQuaternion(float InX, float InY, float InZ, float InW, const TArray<EGSplatSwizzleAxis>& Swizzle)
 {
+	check(Swizzle.Num() == 3);
 	FVector3f XAxis = UnitVectorForAxis(Swizzle[0]);
 	FVector3f YAxis = UnitVectorForAxis(Swizzle[1]);
 	FVector3f ZAxis = UnitVectorForAxis(Swizzle[2]);
@@ -184,13 +189,13 @@ FVector4f SwizzleQuaternion(float InX, float InY, float InZ, float InW, const TS
 	};
 }
 
-bool FGSplatImportData::ImportPly(const FGSplatImportData& ImportData, FGaussianSplatData& Splats)
+bool GSplatImporter::ImportPly(const UGSplatImportData& ImportData, happly::PLYData* PlyData, FGaussianSplatData& Splats)
 {
-	if (!ImportData.PlyData || !ImportData.PlyData->hasElement("vertex"))
+	if (!PlyData || !PlyData->hasElement("vertex"))
 	{
 		return false;
 	}
-	auto& vertices = ImportData.PlyData->getElement("vertex");
+	auto& vertices = PlyData->getElement("vertex");
 
 	Splats.bHasNormals = ImportData.bImportNormals;
 
@@ -313,9 +318,9 @@ bool FGSplatImportData::ImportPly(const FGSplatImportData& ImportData, FGaussian
 		{
 			// * 0.282095 + 0.5 to RGB
 
-			sho[i].X = dc_x[i]	* 0.28209479177387814f + 0.5;
-			sho[i].Y = dc_y[i]	* 0.28209479177387814f + 0.5;
-			sho[i].Z = dc_z[i]	* 0.28209479177387814f + 0.5;
+			sho[i].X = dc_x[i]	* 0.28209479177387814f + 0.5f;
+			sho[i].Y = dc_y[i]	* 0.28209479177387814f + 0.5f;
+			sho[i].Z = dc_z[i]	* 0.28209479177387814f + 0.5f;
 		}
 		else
 		{
@@ -329,6 +334,13 @@ bool FGSplatImportData::ImportPly(const FGSplatImportData& ImportData, FGaussian
 			sho[i].X = UCharToFloat(red[i]);
 			sho[i].Y = UCharToFloat(green[i]);
 			sho[i].Z = UCharToFloat(blue[i]);
+		}
+
+		if (ImportData.bApplyGammaCorrection)
+		{
+			sho[i].X = FMath::Pow(sho[i].X, 2.2f);
+			sho[i].Y = FMath::Pow(sho[i].Y, 2.2f);
+			sho[i].Z = FMath::Pow(sho[i].Z, 2.2f);
 		}
 
 		if (bCompressedOpacity)
@@ -404,13 +416,3 @@ bool FGSplatImportData::ImportPly(const FGSplatImportData& ImportData, FGaussian
 }
 
 #endif
-
-
-FGSplatImportData::~FGSplatImportData()
-{
-	if (PlyData)
-	{
-		delete PlyData;
-		PlyData = nullptr;
-	}
-}

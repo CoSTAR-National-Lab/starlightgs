@@ -92,6 +92,10 @@ private:
 	TWeakPtr<FGaussianSplatResourceWrapper> WeakWrapper;
 
 public:
+
+	UPROPERTY(VisibleAnywhere, Instanced, Category= ImportSettings)
+	TObjectPtr<class UGSplatImportData> GSplatImportData;
+
 #if WITH_EDITORONLY_DATA
 
 	UPROPERTY(VisibleAnywhere, Instanced, Category = ImportSettings)

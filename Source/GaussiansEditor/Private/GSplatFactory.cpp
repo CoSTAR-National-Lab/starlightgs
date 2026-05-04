@@ -2,8 +2,11 @@
 
 #if WITH_EDITOR
 
+#include <happly.h>
+
 #include "GaussiansEditorModule.h"
 #include "GSplatAsset.h"
+#include "GSplatImportData.h"
 #include "GSplatImporter.h"
 #include "GSplatImportWindow.h"
 #include "EditorFramework/AssetImportData.h"
@@ -13,7 +16,7 @@
 #define LOCTEXT_NAMESPACE "GSplatFactory"
 
 
-static bool ShowGSplatImportWindow(const FString& Filename, FGSplatImportData* ImportData)
+static bool ShowGSplatImportWindow(const FString& Filename, UGSplatImportData* ImportData)
 {
 	check(ImportData);
 
@@ -67,6 +70,8 @@ static bool ShowGSplatImportWindow(const FString& Filename, FGSplatImportData* I
 	ImportData->ScaleFactor = GSplatOptionWindow->GetScaleFactor();
 
 	GSplatOptionWindow->GetImportSwizzle(ImportData->Swizzle);
+
+	ImportData->bApplyGammaCorrection = GSplatOptionWindow->GetApplyGammaCorrection();
 
 	return GSplatOptionWindow->ShouldImport();
 }
@@ -178,6 +183,10 @@ UObject* UGSplatFactory::ImportInternal(UClass* InClass, UObject* InParent, FNam
 	GEditor->GetEditorSubsystem<UImportSubsystem>()->BroadcastAssetPreImport(this, InClass, InParent, InName, Parms);
 
 	UGSplatAsset* Object = InExistingAsset ? InExistingAsset : NewObject<UGSplatAsset>(InParent, InClass, InName, Flags);
+	if (!Object->GSplatImportData)
+	{
+		Object->GSplatImportData = NewObject<UGSplatImportData>(InParent, UGSplatImportData::StaticClass());
+	}
 	Object->Splats.Empty();
 
 	bOutOperationCanceled = false;
@@ -190,9 +199,16 @@ UObject* UGSplatFactory::ImportInternal(UClass* InClass, UObject* InParent, FNam
 	}
 
 	// Parse file into preview data required for import dialogue
-	FGSplatImportData ImportData;
+	happly::PLYData* PlyData = nullptr;
+	ON_SCOPE_EXIT
+	{
+		if (PlyData)
+		{
+			delete PlyData;
+		}
+	};
 
-	if (!FGSplatImportData::ParsePly(Filename, ImportData))
+	if (!GSplatImporter::ParsePly(Filename, *Object->GSplatImportData, &PlyData))
 	{
 		UE_LOG(LogGSplatEditor, Error, TEXT("Failed to parse ply: %s"), *Filename);
 
@@ -205,7 +221,7 @@ UObject* UGSplatFactory::ImportInternal(UClass* InClass, UObject* InParent, FNam
 	// Open import dialogue for user to select options
 	if (!bIsUnattended)
 	{
-		if (!ShowGSplatImportWindow(Filename, &ImportData))
+		if (!ShowGSplatImportWindow(Filename, Object->GSplatImportData))
 		{
 			bOutOperationCanceled = true;
 			return nullptr;
@@ -213,7 +229,7 @@ UObject* UGSplatFactory::ImportInternal(UClass* InClass, UObject* InParent, FNam
 	}
 
 	// Proceed with import, applying specified options during import
-	if (!FGSplatImportData::ImportPly(ImportData, Object->Splats))
+	if (!GSplatImporter::ImportPly(*Object->GSplatImportData, PlyData, Object->Splats))
 	{
 		UE_LOG(LogGSplatEditor, Error, TEXT("Failed to import ply: %s"), *Filename);
 		Object->Splats.Empty();

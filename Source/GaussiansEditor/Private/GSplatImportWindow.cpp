@@ -323,6 +323,31 @@ void SGSplatImportWindow::Construct(const FArguments& InArgs)
 				.DefaultAxis(ImportData->Swizzle[2])
 			]
 		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(2)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.VAlign(VAlign_Center)
+			.HAlign(HAlign_Right)
+			.AutoWidth()
+			.Padding(2.0f)
+			[
+				SNew(STextBlock)
+				.Text(LOCTEXT("ApplyGammaCorrectionCheckBoxLabel", "Apply Gamma Correction"))
+			]
+			+ SHorizontalBox::Slot()
+			.VAlign(VAlign_Center)
+			.HAlign(HAlign_Right)
+			.AutoWidth()
+			.Padding(2.0f)
+			[
+				SAssignNew(ApplyGammaCorrectionCheckBox, SCheckBox)
+				.ToolTipText(LOCTEXT("ApplyGammaCorrectionCheckBoxTooltip", "Apply Gamma correction to base color attribute on import."))
+				.IsChecked(ImportData->bApplyGammaCorrection ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+			]
+		]
 	);
 }
 
@@ -366,8 +391,14 @@ bool SGSplatImportWindow::ShouldImportMetallicRoughness() const
 	return ImportMetallicRoughnessCheckBox->IsChecked();
 }
 
-void SGSplatImportWindow::GetImportSwizzle(TStaticArray<EGSplatSwizzleAxis, 3>& Axes) const
+bool SGSplatImportWindow::GetApplyGammaCorrection() const
 {
+	return ApplyGammaCorrectionCheckBox->IsChecked();
+}
+
+void SGSplatImportWindow::GetImportSwizzle(TArray<EGSplatSwizzleAxis>& Axes) const
+{
+	check(Axes.Num() == 3);
 	Axes[0] = XAxisSwizzleWidget->GetSelectedAxis();
 	Axes[1] = YAxisSwizzleWidget->GetSelectedAxis();
 	Axes[2] = ZAxisSwizzleWidget->GetSelectedAxis();
@@ -381,7 +412,7 @@ bool SGSplatImportWindow::CanImport() const
 	}
 
 	// Check all swizzle axes are different
-	TStaticArray<EGSplatSwizzleAxis, 3> Axes;
+	TArray<EGSplatSwizzleAxis> Axes{ EGSplatSwizzleAxis::X, EGSplatSwizzleAxis::Y, EGSplatSwizzleAxis::Z };
 	GetImportSwizzle(Axes);
 	uint32 Counter = 0;
 	for (const auto& i : Axes)

@@ -11,7 +11,7 @@
 #include "GSplatFactory.generated.h"
 
 struct FGaussianSplatData;
-class FGSplatImportData;
+class UGSplatImportData;
 
 
 /**

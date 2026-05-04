@@ -2,6 +2,8 @@
 
 #include "GaussianSplatResource.h"
 
+#include "GSplatImportData.h"
+
 #if WITH_EDITOR
 #include "EditorFramework/AssetImportData.h"
 #endif

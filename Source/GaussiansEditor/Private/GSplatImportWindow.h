@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "Widgets/SCompoundWidget.h"
 
-#include "GSplatImporter.h"
+#include "GSplatImportData.h"
 
 
 class SGSplatSwizzleSelectionWidget : public SCompoundWidget
@@ -35,7 +35,7 @@ class SGSplatImportWindow : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SGSplatImportWindow) {}
-		SLATE_ARGUMENT(FGSplatImportData*, ImportData)
+		SLATE_ARGUMENT(UGSplatImportData*, ImportData)
 
 		SLATE_ARGUMENT(TSharedPtr<SWindow>, WidgetWindow)
 		SLATE_ARGUMENT(FText, FullPath)
@@ -55,20 +55,23 @@ public:
 
 	inline float GetScaleFactor() const { return ScaleFactor; }
 
+	bool GetApplyGammaCorrection() const;
+
 	// Gets the swizzle to apply on import
-	void GetImportSwizzle(TStaticArray<EGSplatSwizzleAxis, 3>& Axes) const;
+	void GetImportSwizzle(TArray<EGSplatSwizzleAxis>& Axes) const;
 
 private:
 	bool CanImport() const;
 
 private:
-	FGSplatImportData* ImportData = nullptr;
+	UGSplatImportData* ImportData = nullptr;
 
 	TSharedPtr<SButton> ImportButton = nullptr;
 	TSharedPtr<SCheckBox> ImportNormalsCheckBox = nullptr;
 	TSharedPtr<SCheckBox> ImportHighOrderSHCheckBox = nullptr;
 	TSharedPtr<SCheckBox> ImportMetallicRoughnessCheckBox = nullptr;
 	TSharedPtr<SNumericEntryBox<float>> ScaleFactoryEntryBox = nullptr;
+	TSharedPtr<SCheckBox> ApplyGammaCorrectionCheckBox = nullptr;
 
 	TSharedPtr<SGSplatSwizzleSelectionWidget> XAxisSwizzleWidget = nullptr;
 	TSharedPtr<SGSplatSwizzleSelectionWidget> YAxisSwizzleWidget = nullptr;
