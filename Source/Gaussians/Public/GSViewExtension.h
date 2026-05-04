@@ -7,16 +7,23 @@
 
 #include "Rendering/GSplatGBuffer.h"
 
+
 DECLARE_STATS_GROUP(TEXT("Gaussians"), STATGROUP_Gaussians, STATCAT_Advanced);
-DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("SplatsRendered"), STAT_SplatsRendered, STATGROUP_Gaussians, GAUSSIANS_API);
+
+DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Submitted: Lit"), STAT_SplatsSubmittedLit, STATGROUP_Gaussians, GAUSSIANS_API);
+DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Submitted: Unlit"), STAT_SplatsSubmittedUnlit, STATGROUP_Gaussians, GAUSSIANS_API);
+
+DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Rendered: Lit"), STAT_SplatsRenderedLit, STATGROUP_Gaussians, GAUSSIANS_API);
+DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Rendered: Unlit"), STAT_SplatsRenderedUnlit, STATGROUP_Gaussians, GAUSSIANS_API);
+
 
 class UWorldSubsystem;
 class FGaussianSplatSceneProxy;
+class FGSGPUStats;
 
 /**
  * 
  */
-
 class GAUSSIANS_API FGSViewExtension : public FSceneViewExtensionBase
 {
 public:
@@ -26,8 +33,12 @@ public:
 	virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override;
 	virtual void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override;
 
+	virtual void PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily) override;
+
 	virtual void PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures) override;
 	virtual void PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& InView, const FPostProcessingInputs& Inputs) override;
+	virtual void PostRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily) override;
+
 	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
 
 private:
@@ -38,7 +49,8 @@ private:
 		FRDGBuilder& GraphBuilder, 
 		const FSceneView& InView, 
 		const FRenderTargetBindingSlots& RenderTargets, 
-		const TSet<FGaussianSplatSceneProxy*>& Proxies
+		const TSet<FGaussianSplatSceneProxy*>& Proxies,
+		const FGSGPUStats* GPUStats
 	);
 
 	// Composite splat buffer with GBuffer
@@ -57,5 +69,7 @@ private:
 	TSet<FGaussianSplatSceneProxy*> RelightableProxies;
 	TSet<FGaussianSplatSceneProxy*> NonRelightableProxies;
 
-	UWorldSubsystem* OwningSubsystem;
+	UWorldSubsystem* OwningSubsystem = nullptr;
+
+	TPimplPtr<FGSGPUStats> GPUStats = nullptr;
 };

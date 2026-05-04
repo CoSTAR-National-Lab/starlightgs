@@ -1,6 +1,7 @@
 #include "GSViewExtension.h"
 #include "GaussianSplatResource.h"
 #include "GaussianSplatSceneProxy.h"
+#include "GSGPUStats.h"
 
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
@@ -137,7 +138,8 @@ void FGSViewExtension::GaussianSplattingPass(
 	FRDGBuilder& GraphBuilder, 
 	const FSceneView& InView,
 	const FRenderTargetBindingSlots& RenderTargets,
-	const TSet<FGaussianSplatSceneProxy*>& Proxies)
+	const TSet<FGaussianSplatSceneProxy*>& Proxies,
+	const FGSGPUStats* GPUStats)
 {
 	// Don't call this when there are no proxies
 	check(!Proxies.IsEmpty());
@@ -185,7 +187,15 @@ void FGSViewExtension::GaussianSplattingPass(
 		FGaussianSplatResource* Resource = Proxy->GetResource_RenderThread();
 
 		auto SplatCount  = Resource->GetSplatCount();
-		INC_DWORD_STAT_BY(STAT_SplatsRendered, SplatCount)
+
+		if (bRelighting)
+		{
+			INC_DWORD_STAT_BY(STAT_SplatsSubmittedLit, SplatCount)
+		}
+		else
+		{
+			INC_DWORD_STAT_BY(STAT_SplatsSubmittedUnlit, SplatCount)
+		}
 
 		TUniformBufferRef<FGaussianSplatShaderResources> ResourceUniformBuffer = TUniformBufferRef<FGaussianSplatShaderResources>{ Resource->GetUniformBuffer() };
 		TUniformBufferRef<FPrimitiveUniformShaderParameters> PrimitiveUniformBuffer = TUniformBufferRef<FPrimitiveUniformShaderParameters>{ Proxy->GetUniformBuffer() };
@@ -306,6 +316,18 @@ void FGSViewExtension::GaussianSplattingPass(
 
 				RHICmdList.DrawPrimitiveIndirect(IndirectArgsRHIBuffer, ArgumentOffset);
 			}
+		);
+	}
+
+	// Copy into transient stats buffer
+	if (GPUStats)
+	{
+		// The num instances set in the indirect args tells how many splats were actually sent for rasterization
+		GPUStats->SetStatFromGPU(
+			GraphBuilder, 
+			bRelighting ? FGSGPUStats::Stat_LitSplatsRendered : FGSGPUStats::Stat_UnlitSplatsRendered,
+			IndirectArgsBuffer,
+			sizeof(uint32)
 		);
 	}
 }
