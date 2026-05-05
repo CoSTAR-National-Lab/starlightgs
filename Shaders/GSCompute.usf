@@ -156,10 +156,10 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 
 		    // Calculate Jacobian matrix based off of projection matrix
 			// Based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
-			float FocalZ = ViewSize.y / (2.0f * View.TanAndInvTanHalfFOV.y);
+			float FocalZ = ViewSize.y / (2.0f * PrimaryView.TanAndInvTanHalfFOV.y);
 
-			float LimX = 1.3f * View.TanAndInvTanHalfFOV.x;
-			float LimY = 1.3f * View.TanAndInvTanHalfFOV.y;
+			float LimX = 1.3f * PrimaryView.TanAndInvTanHalfFOV.x;
+			float LimY = 1.3f * PrimaryView.TanAndInvTanHalfFOV.y;
 
 			float TxTz = ViewPosition.x / ViewPosition.z;
 			float TyTz = ViewPosition.y / ViewPosition.z;
@@ -297,11 +297,14 @@ struct FOutVertex
 	float3 Conic : CONIC;
     float Opacity : OPACITY;
 
-    float Depth : DEPTH;
+	float DeviceZ : DEPTH;
 
 #if ENABLE_RELIGHTING
     float2 MR : METALLICROUGHNESS;
     float3 Normal : NORMAL_MEAN;
+#else
+	// For velocity calculation
+	float2 PositionNDC : POSITION_NDC;
 #endif
 };
 
@@ -330,15 +333,19 @@ FOutVertex GSSplatting_VS(uint GlobalVertexId : SV_VertexID, uint InstanceID : S
     float2 ScreenSpacePos = VS_SSPositions[Index];
     float2 Vertex = Quad[GlobalVertexId];
 
-	Output.Mean = float2((float2(ScreenSpacePos.x, -ScreenSpacePos.y) + 1) * 0.5 * PrimaryView.ViewSizeAndInvSize.xy);
+	Output.Mean = float2((float2(ScreenSpacePos.x, -ScreenSpacePos.y) + 1) * 0.5f * PrimaryView.ViewSizeAndInvSize.xy);
     Output.Position = float4(ScreenSpacePos.xy + (Vertex.x * QuadScale.zw + Vertex.y * QuadScale.xy), 0, 1);
 
     // Must invert bits for unlit splats as they are sorted in opposite order
-    Output.Depth = inverse_order_preserving_float_map(VS_Depth[InstanceID]);
+	float SceneDepth = inverse_order_preserving_float_map(VS_Depth[InstanceID]);
+	// Multiply by 100 to convert to centimetres
+	Output.DeviceZ = ConvertToDeviceZ(100.0f * SceneDepth);
 
 #if ENABLE_RELIGHTING
 	Output.MR = UnpackMetallicRoughness(VS_MetallicRoughness[Index]);
 	Output.Normal = UnpackNormal(VS_Normal[Index]);
+#else
+	Output.PositionNDC = Output.Position.xy - PrimaryView.TemporalAAJitter.xy * PrimaryView.ViewSizeAndInvSize.zw;
 #endif
 
     return Output;
@@ -352,9 +359,10 @@ struct FRTOut
 #if ENABLE_RELIGHTING
     float4 Normal : SV_TARGET1;
     float4 MetallicRoughness : SV_TARGET2;
-    float Depth : SV_TARGET3;
+    float DeviceZ : SV_TARGET3;
 #else
-    float Depth : SV_Depth;
+    float4 Velocity : SV_TARGET1;
+	float DeviceZ : SV_Depth;
 #endif
 
 };
@@ -373,12 +381,20 @@ FRTOut GSSplatting_PS(FOutVertex Input)
 #if ENABLE_RELIGHTING
     Output.Normal = float4(Input.Normal * Alpha, Alpha);
     Output.MetallicRoughness = float4(Input.MR * Alpha, 0, Alpha);
+#else
+	// Must write out velocity for TAA/TSR for unlit splats, as they do not write depth information where velocity can be reconstructed from
+	float4 Clip = float4(Input.PositionNDC, Input.DeviceZ, 1.0f);
+	// ClipToPrevClip does not include AA jitter
+	float4 PrevClip = mul(Clip, PrimaryView.ClipToPrevClip);
+	PrevClip.xyz /= PrevClip.w;
+	float3 Velocity = float3(Input.PositionNDC - PrevClip.xy, Input.DeviceZ - PrevClip.z);
+
+	Output.Velocity = EncodeVelocityToTexture(Velocity);
 #endif
 
     // For lit splats, will output to depth component of GSplatGBuffer
 	// For unlit splats, only used to test against scene depth and not written to depth buffer
-	// Multiply by 100 to convert to centimetres
-	Output.Depth = ConvertToDeviceZ(100.0f * Input.Depth);
+	Output.DeviceZ = Input.DeviceZ;
 
     return Output;
 }

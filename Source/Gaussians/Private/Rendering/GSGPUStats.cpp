@@ -8,6 +8,7 @@
 
 void FGSGPUStats::ProcessBeginRender(FRDGBuilder& GraphBuilder)
 {
+	check(IsInRenderingThread());
 	checkf(!StatsTransientBuffer, TEXT("Transient buffer has already been allocated - did you call ProcessBeginRender twice in the same frame?"));
 
 	TStaticArray<uint32, Stat_Count> StatValues{ 0 };
@@ -48,6 +49,7 @@ void FGSGPUStats::ProcessBeginRender(FRDGBuilder& GraphBuilder)
 
 void FGSGPUStats::ProcessEndRender(FRDGBuilder& GraphBuilder)
 {
+	check(IsInRenderingThread());
 	checkf(StatsTransientBuffer, TEXT("Transient buffer has not been allocated - did you call ProcessBeginRender at the start of the frame?"));
 
 	// Queue stats for reading back in future
@@ -73,6 +75,7 @@ void FGSGPUStats::ProcessEndRender(FRDGBuilder& GraphBuilder)
 
 void FGSGPUStats::SetStatFromGPU(FRDGBuilder& GraphBuilder, EStatID Stat, FRDGBufferRef SourceData, uint32 OffsetInBytes) const
 {
+	check(IsInRenderingThread());
 	checkf(StatsTransientBuffer, TEXT("Transient buffer has not been allocated - did you call ProcessBeginRender at the start of the frame?"));
 
 	uint64 DestOffset = static_cast<uint64>(Stat) * sizeof(uint32);

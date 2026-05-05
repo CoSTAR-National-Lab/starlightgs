@@ -127,7 +127,8 @@ using FRelitBlendState = TStaticBlendState<
 	/* Depth:  */ CW_RED, BO_Max, BF_One, BF_One, BO_Add, BF_One, BF_One
 >;
 using FUnlitBlendState = TStaticBlendState<
-	CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha
+	CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha,
+	CW_RGBA, BO_Add, BF_One, BF_Zero, BO_Add, BF_One, BF_Zero
 >;
 
 using FRelitDepthStencilState = TStaticDepthStencilState<false, CF_Always>;

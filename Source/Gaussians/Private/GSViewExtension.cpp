@@ -5,6 +5,7 @@
 
 #include "RenderGraphUtils.h"
 #include "PostProcess/PostProcessInputs.h"
+#include "ScenePrivate.h"
 
 #include "Subsystems/WorldSubsystem.h"
 
@@ -65,13 +66,18 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 	// Render all splats that don't support relighting
 	if (!NonRelightableProxies.IsEmpty())
 	{
+		check(InView.bIsViewInfo);
+		const FViewInfo& ViewInfo = static_cast<const FViewInfo&>(InView);
+
 		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Unlit");
 		const FSceneTextureUniformParameters* SceneTextures = Inputs.SceneTextures->GetContents();
 		FRDGTextureRef SceneColorTexture = SceneTextures->SceneColorTexture;
+		FRDGTextureRef SceneVelocityTexture = ViewInfo.GetSceneTextures().Velocity;
 		FRDGTextureRef SceneDepthTexture = SceneTextures->SceneDepthTexture;
 
 		FRenderTargetBindingSlots RenderTargets{};
 		RenderTargets[0] = FRenderTargetBinding{ SceneColorTexture, ERenderTargetLoadAction::ELoad };
+		RenderTargets[1] = FRenderTargetBinding{ SceneVelocityTexture, ERenderTargetLoadAction::ELoad };
 		RenderTargets.DepthStencil = FDepthStencilBinding{
 			SceneDepthTexture, ERenderTargetLoadAction::ELoad, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthRead_StencilNop
 		};
