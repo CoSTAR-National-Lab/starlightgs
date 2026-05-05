@@ -22,7 +22,8 @@ namespace GPURadixSort
 		FRDGBufferRef Counter, 
 		uint32 CounterOffset, 
 		uint32 KeyMask, 
-		ERHIFeatureLevel::Type FeatureLevel
+		ERHIFeatureLevel::Type FeatureLevel,
+		bool bDescending = false
 	);
 
 	// Overload with finer-grained control, for example in a situation with sub-allocating out of buffers
@@ -37,7 +38,8 @@ namespace GPURadixSort
 		FRDGBufferRef Counter,
 		uint32 CounterOffset,
 		uint32 KeyMask,
-		ERHIFeatureLevel::Type FeatureLevel
+		ERHIFeatureLevel::Type FeatureLevel,
+		bool bDescending = false
 	);
 
 }

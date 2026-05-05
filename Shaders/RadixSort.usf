@@ -336,7 +336,11 @@ void RadixSortUpsweepCS(
 	// Accumulate digit counters for the tiles assigned to this group.
 	while ( GroupKeyBegin < GroupKeyEnd )
 	{
-		const uint Key = InKeys[GroupKeyBegin + ThreadId];
+		const uint Key =
+#if RADIX_SORT_DESCENDING
+			~
+#endif
+			InKeys[GroupKeyBegin + ThreadId];
 		const uint Digit = (Key >> RadixShift) & DIGIT_MASK;
 		const uint BankIndex = Digit * BANKS_PER_DIGIT + BankOffset;
 		LocalCounters[BankIndex * PADDED_BANK_SIZE + CounterOffset] += 1;
@@ -351,7 +355,11 @@ void RadixSortUpsweepCS(
 	{
 		if ( GroupKeyBegin + ThreadId < GroupKeyEnd )
 		{
-			const uint Key = InKeys[GroupKeyBegin + ThreadId];
+			const uint Key =
+#if RADIX_SORT_DESCENDING
+				~
+#endif
+				InKeys[GroupKeyBegin + ThreadId];
 			const uint Digit = (Key >> RadixShift) & DIGIT_MASK;
 			const uint BankIndex = Digit * BANKS_PER_DIGIT + BankOffset;
 			LocalCounters[BankIndex * PADDED_BANK_SIZE + CounterOffset] += 1;
@@ -862,7 +870,11 @@ void RadixSortDownsweepCS(
 		[unroll]
 		for ( KeyIndex = 0; KeyIndex < KEYS_PER_LOOP; ++KeyIndex )
 		{
-			Keys[KeyIndex] = InKeys[GroupKeyBegin + ThreadId * KEYS_PER_LOOP + KeyIndex];
+			Keys[KeyIndex] =
+#if RADIX_SORT_DESCENDING
+				~
+#endif
+				InKeys[GroupKeyBegin + ThreadId * KEYS_PER_LOOP + KeyIndex];
 		}
 
 		// Scan keys and compute offsets.
@@ -887,7 +899,11 @@ void RadixSortDownsweepCS(
 		{
 			const uint Digit = Digits[KeyIndex];
 			const uint GlobalScatterIndex = LocalOffsets[Digit] + ThreadId * KEYS_PER_LOOP + KeyIndex - LocalTotals[Digit + DIGIT_SCAN_PADDING - 1];
-			OutKeys[GlobalScatterIndex] = Keys[KeyIndex];
+			OutKeys[GlobalScatterIndex] =
+#if RADIX_SORT_DESCENDING
+				~
+#endif
+				Keys[KeyIndex];
 		}
 
 #if RADIX_SORT_VALUES
@@ -942,7 +958,11 @@ void RadixSortDownsweepCS(
 		{
 			if (ThreadId * KEYS_PER_LOOP + KeyIndex < Parameters.ExtraKeyCount)
 			{
-				Keys[KeyIndex] = InKeys[GroupKeyBegin + ThreadId * KEYS_PER_LOOP + KeyIndex];
+				Keys[KeyIndex] =
+#if RADIX_SORT_DESCENDING
+					~
+#endif
+					InKeys[GroupKeyBegin + ThreadId * KEYS_PER_LOOP + KeyIndex];
 			}
 			else
 			{
@@ -974,7 +994,11 @@ void RadixSortDownsweepCS(
 			{
 				const uint Digit = Digits[KeyIndex];
 				const uint GlobalScatterIndex = LocalOffsets[Digit] + ThreadId * KEYS_PER_LOOP + KeyIndex - LocalTotals[Digit + DIGIT_SCAN_PADDING - 1];
-				OutKeys[GlobalScatterIndex] = Keys[KeyIndex];
+				OutKeys[GlobalScatterIndex] =
+#if RADIX_SORT_DESCENDING
+					~
+#endif
+					Keys[KeyIndex];
 			}
 		}
 

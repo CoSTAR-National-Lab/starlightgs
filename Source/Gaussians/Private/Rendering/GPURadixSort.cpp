@@ -93,6 +93,9 @@ public:
 	DECLARE_GLOBAL_SHADER(FGPURadixSortUpsweepCS);
 	SHADER_USE_PARAMETER_STRUCT(FGPURadixSortUpsweepCS, FGlobalShader);
 
+	class FRadixSortDescending : SHADER_PERMUTATION_BOOL("RADIX_SORT_DESCENDING");
+	using FPermutationDomain = TShaderPermutationDomain<FRadixSortDescending>;
+
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER(uint32, RadixShift)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FRadixSortParameters>, RadixSortParameterBuffer)
@@ -139,7 +142,8 @@ public:
 	SHADER_USE_PARAMETER_STRUCT(FGPURadixSortDownsweepCS, FGlobalShader);
 
 	class FRadixSortValues : SHADER_PERMUTATION_BOOL("RADIX_SORT_VALUES");
-	using FPermutationDomain = TShaderPermutationDomain<FRadixSortValues>;
+	class FRadixSortDescending : SHADER_PERMUTATION_BOOL("RADIX_SORT_DESCENDING");
+	using FPermutationDomain = TShaderPermutationDomain<FRadixSortValues, FRadixSortDescending>;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER(uint32, RadixShift)
@@ -176,7 +180,8 @@ uint32 GPURadixSort::SortBufferIndirect(
 	FRDGBufferRef Counter, 
 	uint32 CounterOffset, 
 	uint32 KeyMask, 
-	ERHIFeatureLevel::Type FeatureLevel)
+	ERHIFeatureLevel::Type FeatureLevel,
+	bool bDescending)
 {
 	check(InKeyBuffers.Num() >= 2); // Only element 0 and 1 will ever be used, but it's not invalid to have a larger array
 	check(InKeyBuffers[0] && InKeyBuffers[1]);
@@ -209,7 +214,8 @@ uint32 GPURadixSort::SortBufferIndirect(
 		Counter,
 		CounterOffset,
 		KeyMask,
-		FeatureLevel
+		FeatureLevel,
+		bDescending
 	);
 }
 
@@ -223,7 +229,8 @@ uint32 GPURadixSort::SortBufferIndirect(
 	FRDGBufferRef Counter, 
 	uint32 CounterOffset, 
 	uint32 KeyMask, 
-	ERHIFeatureLevel::Type FeatureLevel
+	ERHIFeatureLevel::Type FeatureLevel,
+	bool bDescending
 )
 {
 	check(BufferIndex >= 0 && BufferIndex < 2);
@@ -246,11 +253,16 @@ uint32 GPURadixSort::SortBufferIndirect(
 	auto ShaderMap = GetGlobalShaderMap(FeatureLevel);
 	TShaderMapRef<FGPURadixSortPopulateParametersCS> PopulateParametersCS(ShaderMap);
 	TShaderMapRef<FGPURadixSortClearOffsetsCS> ClearOffsetsCS(ShaderMap);
-	TShaderMapRef<FGPURadixSortUpsweepCS> UpsweepCS(ShaderMap);
+
+	FGPURadixSortUpsweepCS::FPermutationDomain UpsweepPermutation;
+	UpsweepPermutation.Set<FGPURadixSortUpsweepCS::FRadixSortDescending>(bDescending);
+	TShaderMapRef<FGPURadixSortUpsweepCS> UpsweepCS(ShaderMap, UpsweepPermutation);
+
 	TShaderMapRef<FGPURadixSortSpineCS> SpineCS(ShaderMap);
 
 	FGPURadixSortDownsweepCS::FPermutationDomain DownsweepPermutation;
 	DownsweepPermutation.Set<FGPURadixSortDownsweepCS::FRadixSortValues>(bSortValues);
+	DownsweepPermutation.Set<FGPURadixSortDownsweepCS::FRadixSortDescending>(bDescending);
 	TShaderMapRef<FGPURadixSortDownsweepCS> DownsweepCS(ShaderMap, DownsweepPermutation);
 
 	// Create parameter and indirect args buffers

@@ -249,7 +249,8 @@ void FGSViewExtension::GaussianSplattingPass(
 			IndirectArgsBuffer,
 			1,
 			UINT32_MAX, 
-			GMaxRHIFeatureLevel
+			GMaxRHIFeatureLevel,
+			!bRelighting  // Unlit splats must be sorted back-to-front
 		);
 
 		GaussianIndexBuffer = InValues[Index];
