@@ -36,6 +36,8 @@ class FGSPrepassCS : public FGlobalShader
 		SHADER_PARAMETER_STRUCT_REF(FGaussianSplatShaderResources, GSResource)
 		SHADER_PARAMETER_STRUCT_REF(FPrimitiveUniformShaderParameters, Primitive)
 
+		SHADER_PARAMETER(float, SplatScaleMultiplier)
+
 		// Out
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint32>, Counter)
 		
@@ -206,6 +208,8 @@ void FGSViewExtension::GaussianSplattingPass(
 		Parameters->View = InView.ViewUniformBuffer;
 		Parameters->GSResource = ResourceUniformBuffer;
 		Parameters->Primitive = PrimitiveUniformBuffer;
+
+		Parameters->SplatScaleMultiplier = Proxy->GetScaleMultiplier();
 
 		Parameters->Counter = GraphBuilder.CreateUAV(IndirectArgsBuffer, PF_R32_UINT);
 

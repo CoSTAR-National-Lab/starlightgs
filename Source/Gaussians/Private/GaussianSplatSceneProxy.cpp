@@ -10,6 +10,7 @@
 
 FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(UGaussianSplatComponent* InComponent)
 	: FPrimitiveSceneProxy(InComponent)
+	, ScaleMultiplier(InComponent->SplatScaleMultiplier)
 {
 	if (InComponent->GaussianSplatAsset)
 	{

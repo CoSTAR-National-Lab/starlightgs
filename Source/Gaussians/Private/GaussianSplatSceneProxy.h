@@ -38,6 +38,9 @@ public:
 
 	bool SupportsRelighting() const;
 
+
+	inline float GetScaleMultiplier() const { return ScaleMultiplier; }
+
 private:
 	// GPU Resources for the asset pointed to by the component
 	// It is NOT safe to dereference this pointer on the game thread
@@ -49,4 +52,7 @@ private:
 	// Cached hit proxy created in CreateHitProxies, used for editor viewport click selection.
 	HHitProxy* SelectionHitProxy = nullptr;
 #endif
+
+	// Per-instance properties
+	float ScaleMultiplier = 1.0f;
 };

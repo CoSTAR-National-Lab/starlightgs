@@ -68,6 +68,8 @@ RWBuffer<uint> OutGaussianIDX;
 // Capacity of buffers holding gaussian properties
 uint BufferCapacity;
 
+float SplatScaleMultiplier;
+
 
 float3x3 VecToScaleMatrix(in float3 Scale)
 {
@@ -145,7 +147,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 			// Perspective divide to get NDC space
 		    ClipPosition.xyz = ClipPosition.xyz / ClipPosition.w;
 
-			float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[DispatchThreadId.x]);
+			float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[DispatchThreadId.x] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz * SplatScaleMultiplier);
 			float3x3 RotationMatrix = QuatToMatrix(GSResources.Orientations[DispatchThreadId.x]);
 
 			RotationMatrix = mul((float3x3) Primitive.RelativeWorldToLocal, RotationMatrix);

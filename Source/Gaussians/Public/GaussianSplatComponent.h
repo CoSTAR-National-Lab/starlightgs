@@ -18,6 +18,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Gaussian Splats")
 	TObjectPtr<UGSplatAsset> GaussianSplatAsset = nullptr;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Gaussian Splats")
+	float SplatScaleMultiplier = 1.0f;
+
 public:
 
 	//~ Begin UObject Interface
