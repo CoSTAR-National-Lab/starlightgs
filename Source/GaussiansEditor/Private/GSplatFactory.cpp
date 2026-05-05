@@ -73,6 +73,7 @@ static bool ShowGSplatImportWindow(const FString& Filename, UGSplatImportData* I
 
 	ImportData->bBaseColorIsRGB = GSplatOptionWindow->GetBaseColorIsRGB();
 	ImportData->bApplyGammaCorrection = GSplatOptionWindow->GetApplyGammaCorrection();
+	ImportData->bOpacityAsAlpha = GSplatOptionWindow->GetOpacityAsAlpha();
 
 	return GSplatOptionWindow->ShouldImport();
 }

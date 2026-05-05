@@ -56,8 +56,8 @@ public:
 	inline float GetScaleFactor() const { return ScaleFactor; }
 
 	bool GetBaseColorIsRGB() const;
-
 	bool GetApplyGammaCorrection() const;
+	bool GetOpacityAsAlpha() const;
 
 	// Gets the swizzle to apply on import
 	void GetImportSwizzle(TArray<EGSplatSwizzleAxis>& Axes) const;
@@ -75,6 +75,7 @@ private:
 	TSharedPtr<SNumericEntryBox<float>> ScaleFactoryEntryBox = nullptr;
 	TSharedPtr<SCheckBox> BaseColorRGBCheckBox = nullptr;
 	TSharedPtr<SCheckBox> ApplyGammaCorrectionCheckBox = nullptr;
+	TSharedPtr<SCheckBox> OpacityAsAlphaCheckBox = nullptr;
 
 	TSharedPtr<SGSplatSwizzleSelectionWidget> XAxisSwizzleWidget = nullptr;
 	TSharedPtr<SGSplatSwizzleSelectionWidget> YAxisSwizzleWidget = nullptr;

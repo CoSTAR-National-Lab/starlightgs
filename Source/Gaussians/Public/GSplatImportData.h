@@ -55,6 +55,9 @@ public:
 	UPROPERTY()
 	bool bApplyGammaCorrection = false;
 
+	UPROPERTY()
+	bool bOpacityAsAlpha = false;
+
 	// Swizzling
 	UPROPERTY()
 	TArray<EGSplatSwizzleAxis> Swizzle{ EGSplatSwizzleAxis::Z, EGSplatSwizzleAxis::X, EGSplatSwizzleAxis::Yn };

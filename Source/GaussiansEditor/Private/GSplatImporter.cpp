@@ -357,7 +357,8 @@ bool GSplatImporter::ImportPly(const UGSplatImportData& ImportData, happly::PLYD
 		}
 		else
 		{
-			sho[i].W = 1.0f / (1.0f + FMath::Exp(-opacity_float[i]));
+			float Opacity = opacity_float[i];
+			sho[i].W = ImportData.bOpacityAsAlpha ? Opacity : 1.0f / (1.0f + FMath::Exp(-Opacity));
 		}
 
 		scales[i] = SwizzleVectorAbs(

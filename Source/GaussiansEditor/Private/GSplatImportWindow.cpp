@@ -373,6 +373,31 @@ void SGSplatImportWindow::Construct(const FArguments& InArgs)
 				.IsChecked(ImportData->bApplyGammaCorrection ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
 			]
 		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(2)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.VAlign(VAlign_Center)
+			.HAlign(HAlign_Right)
+			.AutoWidth()
+			.Padding(2.0f)
+			[
+				SNew(STextBlock)
+				.Text(LOCTEXT("OpacityAsAlphaCheckBoxLabel", "Import Opacity as Alpha"))
+			]
+			+ SHorizontalBox::Slot()
+			.VAlign(VAlign_Center)
+			.HAlign(HAlign_Right)
+			.AutoWidth()
+			.Padding(2.0f)
+			[
+				SAssignNew(OpacityAsAlphaCheckBox, SCheckBox)
+				.ToolTipText(LOCTEXT("OpacityAsAlphaCheckBoxTooltip", "Treat opacity values as alpha values on import."))
+				.IsChecked(ImportData->bOpacityAsAlpha ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+			]
+		]
 	);
 }
 
@@ -424,6 +449,11 @@ bool SGSplatImportWindow::GetBaseColorIsRGB() const
 bool SGSplatImportWindow::GetApplyGammaCorrection() const
 {
 	return ApplyGammaCorrectionCheckBox->IsChecked();
+}
+
+bool SGSplatImportWindow::GetOpacityAsAlpha() const
+{
+	return OpacityAsAlphaCheckBox->IsChecked();
 }
 
 void SGSplatImportWindow::GetImportSwizzle(TArray<EGSplatSwizzleAxis>& Axes) const
