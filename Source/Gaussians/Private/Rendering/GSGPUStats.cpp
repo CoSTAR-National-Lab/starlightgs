@@ -45,6 +45,8 @@ void FGSGPUStats::ProcessBeginRender(FRDGBuilder& GraphBuilder)
 		FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Stat_Count),
 		TEXT("Gaussians.TransientStatsBuffer")
 	);
+
+	AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(StatsTransientBuffer, PF_R32_UINT), 0);
 }
 
 void FGSGPUStats::ProcessEndRender(FRDGBuilder& GraphBuilder)
