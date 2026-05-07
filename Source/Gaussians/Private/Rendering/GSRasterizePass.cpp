@@ -129,8 +129,8 @@ using FRelitBlendState = TStaticBlendState<
 	/* Depth:  */ CW_RED, BO_Max, BF_One, BF_One, BO_Add, BF_One, BF_One
 >;
 using FUnlitBlendState = TStaticBlendState<
-	CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha,
-	CW_RGBA, BO_Add, BF_One, BF_Zero, BO_Add, BF_One, BF_Zero
+	/* Color:    */ CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha,
+	/* Velocity: */ CW_RGBA, BO_Add, BF_One, BF_Zero, BO_Add, BF_One, BF_Zero
 >;
 
 using FRelitDepthStencilState = TStaticDepthStencilState<false, CF_Always>;
@@ -185,8 +185,16 @@ void FGSViewExtension::GaussianSplattingPass(
 	TShaderMapRef<FSplattingPassVS> VertexShader(ShaderMap, Permutation);
 	TShaderMapRef<FSplattingPassPS> PixelShader(ShaderMap, Permutation);
 
+	bool bAnySplatsRendered = false;
 	for (auto Proxy : Proxies)
 	{
+		FBoxSphereBounds ProxyBounds = Proxy->GetBounds();
+		if (!InView.GetCullingFrustum().IntersectBox(ProxyBounds.Origin, ProxyBounds.BoxExtent))
+		{
+			continue;
+		}
+		bAnySplatsRendered = true;
+
 		FGaussianSplatResource* Resource = Proxy->GetResource_RenderThread();
 
 		auto SplatCount  = Resource->GetSplatCount();
@@ -237,6 +245,12 @@ void FGSViewExtension::GaussianSplattingPass(
 			Parameters,
 			DispatchSize
 		);
+	}
+
+	// If no splats survived culling then no further work required
+	if (!bAnySplatsRendered)
+	{
+		return;
 	}
 
 	// Sort all projected screens-space splats along view axis
