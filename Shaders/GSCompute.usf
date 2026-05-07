@@ -146,8 +146,8 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 		float3 v = float3(1.0f, 0.0f, 0.0f);
 		float MajorEigenvalue = 0.0f;
 
-		[unroll]
-		for (int i = 0; i < 4; ++i)
+		UNROLL
+    	for (int i = 0; i < 4; ++i)
 		{
 			v = mul(v, Covariance3D);
 			float v_length = length(v);
@@ -238,7 +238,18 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 				float2 Min = min(min(V00, V10), min(V01, V11));
 				float2 Max = max(max(V00, V10), max(V01, V11));
 
-		    	if (all(and(Min < 1.0f, Max.x > -1.0f)))
+				bool bVisible = all(and(Min < 1.0f, Max.x > -1.0f));
+
+				// Cull against HZB
+				if (bVisible)
+				{
+					// Multiply by 100 again to convert to Unreal units
+					float Depth = ConvertToDeviceZ(100.0f * ViewPosition.z);
+					FScreenRect ScreenRect = GetScreenRect(int4(0, 0, HZBViewSize), float3(Min, Depth), float3(Max, Depth), 4);
+					bVisible &= IsVisibleHZB(ScreenRect, true);
+				}
+
+		    	if (bVisible)
 				{
 					// Write splat properties to groupshared memory
 					uint Index;

@@ -3,6 +3,8 @@
 #include "GaussianSplatSceneProxy.h"
 #include "GSGPUStats.h"
 
+#include "GaussiansHZB.h"
+
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 #include "RendererInterface.h"
@@ -37,6 +39,8 @@ class FGSPrepassCS : public FGlobalShader
 		SHADER_PARAMETER_STRUCT_REF(FPrimitiveUniformShaderParameters, Primitive)
 
 		SHADER_PARAMETER(float, SplatScaleMultiplier)
+
+		SHADER_PARAMETER_STRUCT_INCLUDE(FGaussiansHZBParameters, HZB)
 
 		// Out
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint32>, Counter)
@@ -218,6 +222,8 @@ void FGSViewExtension::GaussianSplattingPass(
 		Parameters->Primitive = PrimitiveUniformBuffer;
 
 		Parameters->SplatScaleMultiplier = Proxy->GetScaleMultiplier();
+
+		Parameters->HZB = Gaussians::GetHZBParameters(GraphBuilder, ViewInfo, Gaussians::EHZBType::FurthestHZB);
 
 		Parameters->Counter = GraphBuilder.CreateUAV(IndirectArgsBuffer, PF_R32_UINT);
 
