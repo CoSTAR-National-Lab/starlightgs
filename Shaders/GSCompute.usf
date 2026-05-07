@@ -3,6 +3,9 @@
 #include "/Engine/Private/OctahedralCommon.ush"
 #include "/Engine/Generated/GeneratedUniformBuffers.ush"
 
+// For frustum & occlusion culling
+#include "/Engine/Private/Nanite/NaniteHZBCull.ush"
+
 
 #ifndef ENABLE_RELIGHTING
 #define ENABLE_RELIGHTING true
@@ -94,9 +97,9 @@ groupshared uint GS_NumSplats;
 groupshared uint GS_OutBufferStartIndex;
 
 groupshared float2 GS_SSPositions[THREADGROUP_SIZE_1D];
-groupshared float4 GS_SSScale[ THREADGROUP_SIZE_1D];
-groupshared float3 GS_Conic[ THREADGROUP_SIZE_1D];
-groupshared float4 GS_ColorOpacity[ THREADGROUP_SIZE_1D];
+groupshared float4 GS_SSScale[THREADGROUP_SIZE_1D];
+groupshared float3 GS_Conic[THREADGROUP_SIZE_1D];
+groupshared float4 GS_ColorOpacity[THREADGROUP_SIZE_1D];
 
 #if ENABLE_RELIGHTING
 groupshared uint GS_Normal[THREADGROUP_SIZE_1D];
@@ -129,35 +132,59 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 	    float4x4 ViewToClip = PrimaryView.ViewToClip;
 	    float2 ViewSize = PrimaryView.ViewSizeAndInvSize.xy;
 
-	    float3 Position = GSResources.Positions[DispatchThreadId.x];
+	    float3 LocalPosition = GSResources.Positions[DispatchThreadId.x];
+	    float4 TranslatedWorldPosition = DFTransformLocalToTranslatedWorld(LocalPosition, MakeDFMatrix4x3(Primitive.PositionHigh, Primitive.LocalToRelativeWorld), PrimaryView.PreViewTranslation);
 
-	    float4 TranslatedPosition = DFTransformLocalToTranslatedWorld(Position, MakeDFMatrix4x3(Primitive.PositionHigh, Primitive.LocalToRelativeWorld), PrimaryView.PreViewTranslation);
+		float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[DispatchThreadId.x] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz * SplatScaleMultiplier);
+		float3x3 RotationMatrix = mul((float3x3) Primitive.RelativeWorldToLocal, QuatToMatrix(GSResources.Orientations[DispatchThreadId.x]));
 
-	    TranslatedPosition.xyz *= 0.01f;
+		// Calculate covariance matrix
+		float3x3 T = mul(RotationMatrix, ScaleMatrix);
+		float3x3 Covariance3D = mul(T, transpose(T));
 
-	    float4 ViewPosition = mul(TranslatedPosition, ViewMatrix);
-		float4 ClipPosition = mul(ViewPosition, ViewToClip);
-		ClipPosition /= ClipPosition.w;
+		// Power iteration to find the largest eigenvalue
+		float3 v = float3(1.0f, 0.0f, 0.0f);
+		float MajorEigenvalue = 0.0f;
 
-	    float Clip = 1.0f;
-		bool bClipped = ClipPosition.z < -Clip;
-
-		if (!bClipped)
+		[unroll]
+		for (int i = 0; i < 4; ++i)
 		{
-			// Perspective divide to get NDC space
-		    ClipPosition.xyz = ClipPosition.xyz / ClipPosition.w;
+			v = mul(v, Covariance3D);
+			float v_length = length(v);
+			if (v_length > 1e-6)
+			{
+				v = v / v_length;
+				MajorEigenvalue = v_length;
+			}
+		}
 
-			float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[DispatchThreadId.x] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz * SplatScaleMultiplier);
-			float3x3 RotationMatrix = QuatToMatrix(GSResources.Orientations[DispatchThreadId.x]);
+		// Compute a safe box extent for frustum culling (original 3DGS paper used same radius):
+		// = 3.0f * sqrt(major_variance)
+		// Factor of 100 converts back to Unreal units
+		float3 WorldSpaceExtent = 300.0f * sqrt(MajorEigenvalue);
 
-			RotationMatrix = mul((float3x3) Primitive.RelativeWorldToLocal, RotationMatrix);
+		// Frustum cull individual splats
+		FFrustumCullData FrustumCullData = BoxCullFrustum(
+			TranslatedWorldPosition.xyz,
+			WorldSpaceExtent,
+			PrimaryView.TranslatedWorldToClip,
+			PrimaryView.ViewToClip,
+			false,
+			true,
+			false
+		);
 
-		    // Calculate covariance matrix
-			float3x3 T = mul(RotationMatrix, ScaleMatrix);
-			float3x3 Covariance3D = mul(T, transpose(T));
+		if (FrustumCullData.bIsVisible)
+		{
+			// Fixes all the maths...
+			TranslatedWorldPosition.xyz *= 0.01f;
+
+			float4 ViewPosition = mul(TranslatedWorldPosition, ViewMatrix);
+			float4 ClipPosition = mul(ViewPosition, ViewToClip);
+			ClipPosition /= ClipPosition.w;
 
 		    // Calculate Jacobian matrix based off of projection matrix
-			// Based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
+			// Jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
 			float FocalZ = ViewSize.y / (2.0f * PrimaryView.TanAndInvTanHalfFOV.y);
 
 			float LimX = 1.3f * PrimaryView.TanAndInvTanHalfFOV.x;
@@ -203,8 +230,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 				float2 MajorAxisMultiplier = MajorAxis / (ViewSize * 0.5f);
 				float2 MinorAxisMultiplier = MinorAxis / (ViewSize * 0.5f);
 
-				// Check if screen space quad is on-screen
-				// TODO: I'm sure this can be done in less operations
+				// More precise culling: check if screen space quad is on-screen
 				float2 V00 = ClipPosition.xy + (-1 * MinorAxisMultiplier + -1 * MajorAxisMultiplier);
 				float2 V10 = ClipPosition.xy + ( 1 * MinorAxisMultiplier + -1 * MajorAxisMultiplier);
 				float2 V01 = ClipPosition.xy + (-1 * MinorAxisMultiplier +  1 * MajorAxisMultiplier);
@@ -212,7 +238,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 				float2 Min = min(min(V00, V10), min(V01, V11));
 				float2 Max = max(max(V00, V10), max(V01, V11));
 
-				if (all(and(Min < 1.0f, Max.x > -1.0f)))
+		    	if (all(and(Min < 1.0f, Max.x > -1.0f)))
 				{
 					// Write splat properties to groupshared memory
 					uint Index;
