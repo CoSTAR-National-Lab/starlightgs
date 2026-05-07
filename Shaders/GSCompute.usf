@@ -128,10 +128,6 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 	//Terminate if we are outside the bounds of our input data
     if (DispatchThreadId.x < GSResources.SplatCount)
     {
-	    float4x4 ViewMatrix = PrimaryView.TranslatedWorldToView;
-	    float4x4 ViewToClip = PrimaryView.ViewToClip;
-	    float2 ViewSize = PrimaryView.ViewSizeAndInvSize.xy;
-
 	    float3 LocalPosition = GSResources.Positions[DispatchThreadId.x];
 	    float4 TranslatedWorldPosition = DFTransformLocalToTranslatedWorld(LocalPosition, MakeDFMatrix4x3(Primitive.PositionHigh, Primitive.LocalToRelativeWorld), PrimaryView.PreViewTranslation);
 
@@ -179,13 +175,13 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 			// Fixes all the maths...
 			TranslatedWorldPosition.xyz *= 0.01f;
 
-			float4 ViewPosition = mul(TranslatedWorldPosition, ViewMatrix);
-			float4 ClipPosition = mul(ViewPosition, ViewToClip);
+			float4 ViewPosition = mul(TranslatedWorldPosition, PrimaryView.TranslatedWorldToView);
+			float4 ClipPosition = mul(ViewPosition, PrimaryView.ViewToClip);
 			ClipPosition /= ClipPosition.w;
 
 		    // Calculate Jacobian matrix based off of projection matrix
 			// Jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
-			float FocalZ = ViewSize.y / (2.0f * PrimaryView.TanAndInvTanHalfFOV.y);
+			float FocalZ = PrimaryView.ViewSizeAndInvSize.y / (2.0f * PrimaryView.TanAndInvTanHalfFOV.y);
 
 			float LimX = 1.3f * PrimaryView.TanAndInvTanHalfFOV.x;
 			float LimY = 1.3f * PrimaryView.TanAndInvTanHalfFOV.y;
@@ -203,7 +199,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 				0.0f,                       0.0f,                       0.0f
 			);
 
-			float3x3 JW = mul(J, transpose((float3x3) ViewMatrix));
+			float3x3 JW = mul(J, transpose((float3x3) PrimaryView.TranslatedWorldToView));
 			float3x3 Covariance2D = mul(JW, mul(transpose(Covariance3D), transpose(JW)));
 
 			float X = Covariance2D[0][0] + 0.3f;
@@ -227,16 +223,12 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 				float2 MajorAxis = min(3 * sqrt(Lambda1), 1024.0f) * DiagonalVector;
 				float2 MinorAxis = min(3 * sqrt(Lambda2), 1024.0f) * float2(DiagonalVector.y, -DiagonalVector.x);
 				
-				float2 MajorAxisMultiplier = MajorAxis / (ViewSize * 0.5f);
-				float2 MinorAxisMultiplier = MinorAxis / (ViewSize * 0.5f);
+				float2 MajorAxisMultiplier = MajorAxis / (PrimaryView.ViewSizeAndInvSize.xy * 0.5f);
+				float2 MinorAxisMultiplier = MinorAxis / (PrimaryView.ViewSizeAndInvSize.xy * 0.5f);
 
 				// More precise culling: check if screen space quad is on-screen
-				float2 V00 = ClipPosition.xy + (-1 * MinorAxisMultiplier + -1 * MajorAxisMultiplier);
-				float2 V10 = ClipPosition.xy + ( 1 * MinorAxisMultiplier + -1 * MajorAxisMultiplier);
-				float2 V01 = ClipPosition.xy + (-1 * MinorAxisMultiplier +  1 * MajorAxisMultiplier);
-				float2 V11 = ClipPosition.xy + ( 1 * MinorAxisMultiplier +  1 * MajorAxisMultiplier);
-				float2 Min = min(min(V00, V10), min(V01, V11));
-				float2 Max = max(max(V00, V10), max(V01, V11));
+				float2 Max = ClipPosition.xy + (abs(MinorAxisMultiplier) + abs(MajorAxisMultiplier));
+				float2 Min = ClipPosition.xy - (abs(MinorAxisMultiplier) + abs(MajorAxisMultiplier));
 
 				bool bVisible = all(and(Min < 1.0f, Max.x > -1.0f));
 
