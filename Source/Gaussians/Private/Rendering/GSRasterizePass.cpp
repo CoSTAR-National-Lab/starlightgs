@@ -242,7 +242,7 @@ void FGSViewExtension::GaussianSplattingPass(
 
 		Parameters->BufferCapacity = Capacity;
 
-		FIntVector DispatchSize = FComputeShaderUtils::GetGroupCount(SplatCount, FGSPrepassCS::GetThreadGroupSize1D());
+		FIntVector DispatchSize = FComputeShaderUtils::GetGroupCountWrapped(SplatCount, FGSPrepassCS::GetThreadGroupSize1D());
 
 		FComputeShaderUtils::AddPass<FGSPrepassCS>(
 			GraphBuilder,

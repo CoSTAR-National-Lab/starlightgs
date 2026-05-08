@@ -1,6 +1,8 @@
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/Quaternion.ush"
 #include "/Engine/Private/OctahedralCommon.ush"
+#include "/Engine/Private/ComputeShaderUtils.ush"
+
 #include "/Engine/Generated/GeneratedUniformBuffers.ush"
 
 // For frustum & occlusion culling
@@ -90,7 +92,7 @@ float3x3 VecToScaleMatrix(in float3 Scale)
 // 3. SplatRasterization (VS+PS) - Renders each splat as a billboard, writing out the depth and color of each splat to the GBuffer
 
 #ifndef THREADGROUP_SIZE_1D
-#define THREADGROUP_SIZE_1D
+#define THREADGROUP_SIZE_1D 1
 #endif
 
 groupshared uint GS_NumSplats;
@@ -110,7 +112,7 @@ groupshared uint GS_Depth[THREADGROUP_SIZE_1D];
 
 
 [numthreads(THREADGROUP_SIZE_1D, 1, 1)]
-void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : SV_GroupIndex)
+void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_GroupID, uint GroupIndex : SV_GroupIndex)
 {
     // Init counter
     if (DispatchThreadId.x == 0)
@@ -123,16 +125,19 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 		GS_NumSplats = 0;
 	}
 
+	// Unwrap group ID
+	uint SplatIndex = GetUnWrappedDispatchThreadId(GroupId, GroupIndex, THREADGROUP_SIZE_1D);
+
 	GroupMemoryBarrierWithGroupSync();
 
 	//Terminate if we are outside the bounds of our input data
-    if (DispatchThreadId.x < GSResources.SplatCount)
+	if (SplatIndex < GSResources.SplatCount)
     {
-	    float3 LocalPosition = GSResources.Positions[DispatchThreadId.x];
+	    float3 LocalPosition = GSResources.Positions[SplatIndex];
 	    float4 TranslatedWorldPosition = DFTransformLocalToTranslatedWorld(LocalPosition, MakeDFMatrix4x3(Primitive.PositionHigh, Primitive.LocalToRelativeWorld), PrimaryView.PreViewTranslation);
 
-		float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[DispatchThreadId.x] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz * SplatScaleMultiplier);
-		float3x3 RotationMatrix = mul((float3x3) Primitive.RelativeWorldToLocal, QuatToMatrix(GSResources.Orientations[DispatchThreadId.x]));
+		float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz * SplatScaleMultiplier);
+		float3x3 RotationMatrix = mul((float3x3) Primitive.RelativeWorldToLocal, QuatToMatrix(GSResources.Orientations[SplatIndex]));
 
 		// Calculate covariance matrix
 		float3x3 T = mul(RotationMatrix, ScaleMatrix);
@@ -251,14 +256,14 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint GroupIndex : S
 					GS_SSScale[Index] = float4(MajorAxisMultiplier, MinorAxisMultiplier);
 					GS_Conic[Index] = Conic;
 	        
-					GS_ColorOpacity[Index] = GSResources.SHAndOpacities[DispatchThreadId.x];
+					GS_ColorOpacity[Index] = GSResources.SHAndOpacities[SplatIndex];
 
 					GS_Depth[Index] = order_preserving_float_map(ViewPosition.z);
 
 #if ENABLE_RELIGHTING
-					float3 WorldSpaceNormal = mul((float3x3) Primitive.RelativeWorldToLocal, GSResources.Normals[DispatchThreadId.x]);
+					float3 WorldSpaceNormal = mul((float3x3) Primitive.RelativeWorldToLocal, GSResources.Normals[SplatIndex]);
 					GS_Normal[Index] = PackNormal(WorldSpaceNormal);
-					GS_MetallicRoughness[Index] = PackMetallicRoughness(GSResources.MetallicRoughness[DispatchThreadId.x]);
+					GS_MetallicRoughness[Index] = PackMetallicRoughness(GSResources.MetallicRoughness[SplatIndex]);
 #endif
 				}
 			}
