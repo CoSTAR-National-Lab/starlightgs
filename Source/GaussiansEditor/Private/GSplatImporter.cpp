@@ -39,6 +39,8 @@ bool GSplatImporter::ParsePly(const FString& Filename, UGSplatImportData& Import
 			return false;
 	}
 
+	ImportData.NumSplats = vertices.count;
+
 	if (!(vertices.hasPropertyType<float>("x")
 		&& vertices.hasPropertyType<float>("y")
 		&& vertices.hasPropertyType<float>("z")))

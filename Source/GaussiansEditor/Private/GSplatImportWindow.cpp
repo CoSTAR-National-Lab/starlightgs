@@ -87,32 +87,14 @@ void SGSplatImportWindow::Construct(const FArguments& InArgs)
 		.MaxDesiredWidth(InArgs._MaxWindowWidth)
 		[
 			SNew(SVerticalBox)
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(2)
-			[
-				SNew(SBorder)
-				.Padding(FMargin(3))
-				.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-				[
-					SNew(SHorizontalBox)
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					[
-						SNew(STextBlock)
-						.Text(LOCTEXT("Import_CurrentFileTitle", "Current Asset: "))
-					]
-					+ SHorizontalBox::Slot()
-					.Padding(5, 0, 0, 0)
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					[
-						SNew(STextBlock)
-						.Text(InArgs._FullPath)
-						.ToolTipText(InArgs._FullPath)
-					]
-				]
-			]
+			+ AddInfoSlot(
+				LOCTEXT("Import_CurrentFileTitle", "Current Asset: "),
+				FText(InArgs._FullPath)
+			)
+			+ AddInfoSlot(
+				LOCTEXT("Import_CurrentSplatCount", "Num Splats: "),
+				FText::AsNumber(ImportData->NumSplats)
+			)
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(2)
@@ -147,258 +129,156 @@ void SGSplatImportWindow::Construct(const FArguments& InArgs)
 
 	InspectorBox->SetContent(
 		SNew(SVerticalBox)
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("ImportNormalsCheckBoxLabel", "Import Normals"))
-			]
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SAssignNew(ImportNormalsCheckBox, SCheckBox)
+		+ AddOptionSlot(
+			LOCTEXT("ImportNormalsCheckBoxLabel", "Import Normals"),
+			[this]
+			{
+				return SAssignNew(ImportNormalsCheckBox, SCheckBox)
 				.ToolTipText(LOCTEXT("ImportNormalsCheckBoxTooltip", "Import per-splat normal vectors."))
 				.IsChecked(ImportData->bHasNormals ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-				.IsEnabled(ImportData->bHasNormals)
-			]
-		]
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("ImportHighOrderSHCheckBoxLabel", "Import High-Order SH"))
-			]
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SAssignNew(ImportHighOrderSHCheckBox, SCheckBox)
+				.IsEnabled(ImportData->bHasNormals);
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("ImportHighOrderSHCheckBoxLabel", "Import High-Order SH"),
+			[this]
+			{
+				return SAssignNew(ImportHighOrderSHCheckBox, SCheckBox)
 				.ToolTipText(LOCTEXT("ImportHighOrderCheckBoxTooltip", "Import per-splat higher-order spherical harmonic coefficients."))
 				.IsChecked(ImportData->bHasHighOrderSH ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-				.IsEnabled(ImportData->bHasHighOrderSH)
-			]
-		]
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("ImportMetallicRoughnessCheckBoxLabel", "Import Metallic/Roughness"))
-			]
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SAssignNew(ImportMetallicRoughnessCheckBox, SCheckBox)
+				.IsEnabled(ImportData->bHasHighOrderSH);
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("ImportMetallicRoughnessCheckBoxLabel", "Import Metallic/Roughness"),
+			[this]
+			{
+				return SAssignNew(ImportMetallicRoughnessCheckBox, SCheckBox)
 				.ToolTipText(LOCTEXT("ImportMetallicRoughnessCheckBoxTooltip", "Import per-splat metallic/roughness properties."))
 				.IsChecked(ImportData->bHasMetallicRoughness ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-				.IsEnabled(ImportData->bHasMetallicRoughness)
-			]
-		]
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("ScaleFactorLabel", "Scale Factor"))
-			]
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SNew(SSpinBox<float>)
+				.IsEnabled(ImportData->bHasMetallicRoughness);
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("ScaleFactorLabel", "Scale Factor"),
+			[this]
+			{
+				return SNew(SSpinBox<float>)
 				.ToolTipText(LOCTEXT("ScaleFactorTooltip", "Scale factor to apply on import. Default of 100 converts from metres to centimetres."))
 				.Value_Lambda([this]{ return ScaleFactor; })
-				.OnValueChanged_Lambda([this](float Val){ ScaleFactor = Val; })
-			]
-		]
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("XAxisSwizzleLabel", "X Swizzle"))
-			]
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SAssignNew(XAxisSwizzleWidget, SGSplatSwizzleSelectionWidget)
-				.DefaultAxis(ImportData->Swizzle[0])
-			]
-		]
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("YAxisSwizzleLabel", "Y Swizzle"))
-			]
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SAssignNew(YAxisSwizzleWidget, SGSplatSwizzleSelectionWidget)
-				.DefaultAxis(ImportData->Swizzle[1])
-			]
-		]
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("ZAxisSwizzleLabel", "Z Swizzle"))
-			]
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SAssignNew(ZAxisSwizzleWidget, SGSplatSwizzleSelectionWidget)
-				.DefaultAxis(ImportData->Swizzle[2])
-			]
-		]
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("ConvertSHCheckBoxLabel", "Base Colour is RGB"))
-			]
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SAssignNew(BaseColorRGBCheckBox, SCheckBox)
+				.OnValueChanged_Lambda([this](float Val){ ScaleFactor = Val; });
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("XAxisSwizzleLabel", "X Swizzle"),
+			[this]
+			{
+				return SAssignNew(XAxisSwizzleWidget, SGSplatSwizzleSelectionWidget)
+				.DefaultAxis(ImportData->Swizzle[0]);
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("YAxisSwizzleLabel", "Y Swizzle"),
+			[this]
+			{
+				return SAssignNew(YAxisSwizzleWidget, SGSplatSwizzleSelectionWidget)
+				.DefaultAxis(ImportData->Swizzle[1]);
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("ZAxisSwizzleLabel", "Z Swizzle"),
+			[this]
+			{
+				return SAssignNew(ZAxisSwizzleWidget, SGSplatSwizzleSelectionWidget)
+				.DefaultAxis(ImportData->Swizzle[2]);
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("ConvertSHCheckBoxLabel", "Base Colour is RGB"),
+			[this]
+			{
+				return SAssignNew(BaseColorRGBCheckBox, SCheckBox)
 				.ToolTipText(LOCTEXT("ConvertSHCheckBoxTooltip", "Check if the original PLY file has encoded base colour in RGB (as opposed to SH coefficients)."))
-				.IsChecked(ImportData->bBaseColorIsRGB ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-			]
-		]
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("ApplyGammaCorrectionCheckBoxLabel", "Apply Gamma Correction"))
-			]
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SAssignNew(ApplyGammaCorrectionCheckBox, SCheckBox)
+				.IsChecked(ImportData->bBaseColorIsRGB ? ECheckBoxState::Checked : ECheckBoxState::Unchecked);
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("ApplyGammaCorrectionCheckBoxLabel", "Apply Gamma Correction"),
+			[this]
+			{
+				return SAssignNew(ApplyGammaCorrectionCheckBox, SCheckBox)
 				.ToolTipText(LOCTEXT("ApplyGammaCorrectionCheckBoxTooltip", "Apply Gamma correction to base color attribute on import."))
-				.IsChecked(ImportData->bApplyGammaCorrection ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-			]
-		]
-		+ SVerticalBox::Slot()
+				.IsChecked(ImportData->bApplyGammaCorrection ? ECheckBoxState::Checked : ECheckBoxState::Unchecked);
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("OpacityAsAlphaCheckBoxLabel", "Import Opacity as Alpha"),
+			[this]
+			{
+				return SAssignNew(OpacityAsAlphaCheckBox, SCheckBox)
+				.ToolTipText(LOCTEXT("OpacityAsAlphaCheckBoxTooltip", "Treat opacity values as alpha values on import."))
+				.IsChecked(ImportData->bOpacityAsAlpha ? ECheckBoxState::Checked : ECheckBoxState::Unchecked);
+			}
+		)
+	);
+}
+
+SVerticalBox::FSlot::FSlotArguments SGSplatImportWindow::AddInfoSlot(FText&& Label, FText&& Value)
+{
+	return MoveTemp(SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(2)
 		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
+			SNew(SBorder)
+			.Padding(FMargin(3))
+			.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
 			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("OpacityAsAlphaCheckBoxLabel", "Import Opacity as Alpha"))
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(STextBlock)
+					.Text(Label)
+				]
+				+ SHorizontalBox::Slot()
+				.Padding(5, 0, 0, 0)
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Text(Value)
+					.ToolTipText(Value)
+				]
 			]
-			+ SHorizontalBox::Slot()
-			.VAlign(VAlign_Center)
-			.HAlign(HAlign_Right)
-			.AutoWidth()
-			.Padding(2.0f)
-			[
-				SAssignNew(OpacityAsAlphaCheckBox, SCheckBox)
-				.ToolTipText(LOCTEXT("OpacityAsAlphaCheckBoxTooltip", "Treat opacity values as alpha values on import."))
-				.IsChecked(ImportData->bOpacityAsAlpha ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-			]
+		]);
+}
+
+SVerticalBox::FSlot::FSlotArguments SGSplatImportWindow::AddOptionSlot(FText&& Label,
+	TFunction<TSharedPtr<SWidget>()>&& CreateWidgetFunc)
+{
+	return MoveTemp(SVerticalBox::Slot()
+	.AutoHeight()
+	.Padding(2)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot()
+		.VAlign(VAlign_Center)
+		.HAlign(HAlign_Right)
+		.AutoWidth()
+		.Padding(2.0f)
+		[
+			SNew(STextBlock)
+			.Text(Label)
 		]
-	);
+		+ SHorizontalBox::Slot()
+		.VAlign(VAlign_Center)
+		.HAlign(HAlign_Right)
+		.AutoWidth()
+		.Padding(2.0f)
+		[
+			CreateWidgetFunc().ToSharedRef()
+		]
+	]);
 }
 
 FReply SGSplatImportWindow::OnImport()

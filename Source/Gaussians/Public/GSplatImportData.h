@@ -29,6 +29,10 @@ class UGSplatImportData : public UObject
 
 public:
 
+	// Number of splats found in the file
+	UPROPERTY()
+	int32 NumSplats = 0;
+
 	// Optional property support
 	UPROPERTY()
 	bool bHasNormals = false;

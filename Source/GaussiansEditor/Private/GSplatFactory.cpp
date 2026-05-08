@@ -29,10 +29,9 @@ static bool ShowGSplatImportWindow(const FString& Filename, UGSplatImportData* I
 	}
 
 	// Compute centered window position based on max window size, which include when all categories are expanded
-	constexpr float ImportWindowWidth = 450.0f;
-	constexpr float ImportWindowHeight = 750.0f;
+	constexpr float ImportWindowWidth = 550.0f;
+	constexpr float ImportWindowHeight = 800.0f;
 	FVector2D ImportWindowSize = FVector2D(ImportWindowWidth, ImportWindowHeight); // Max window size it can get based on current slate
-
 
 	FSlateRect WorkAreaRect = FSlateApplicationBase::Get().GetPreferredWorkArea();
 	FVector2D DisplayTopLeft(WorkAreaRect.Left, WorkAreaRect.Top);
