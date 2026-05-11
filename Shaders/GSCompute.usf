@@ -340,7 +340,7 @@ struct FOutVertex
     float3 Normal : NORMAL_MEAN;
 #else
 	// For velocity calculation
-	float2 PositionNDC : POSITION_NDC;
+	float3 TranslatedWorldPosition : WORLDPOS;
 #endif
 };
 
@@ -381,7 +381,8 @@ FOutVertex GSSplatting_VS(uint GlobalVertexId : SV_VertexID, uint InstanceID : S
 	Output.MR = UnpackMetallicRoughness(VS_MetallicRoughness[Index]);
 	Output.Normal = UnpackNormal(VS_Normal[Index]);
 #else
-	Output.PositionNDC = Output.Position.xy - PrimaryView.TemporalAAJitter.xy * PrimaryView.ViewSizeAndInvSize.zw;
+	float4 TranslatedWorldPos = mul(float4(ScreenSpacePos, Output.DeviceZ, 1.0f), PrimaryView.ClipToTranslatedWorld);
+	Output.TranslatedWorldPosition = TranslatedWorldPos.xyz / TranslatedWorldPos.w;
 #endif
 
     return Output;
@@ -419,11 +420,18 @@ FRTOut GSSplatting_PS(FOutVertex Input)
     Output.MetallicRoughness = float4(Input.MR * Alpha, 0, Alpha);
 #else
 	// Must write out velocity for TAA/TSR for unlit splats, as they do not write depth information where velocity can be reconstructed from
-	float4 Clip = float4(Input.PositionNDC, Input.DeviceZ, 1.0f);
-	// ClipToPrevClip does not include AA jitter
-	float4 PrevClip = mul(Clip, PrimaryView.ClipToPrevClip);
-	PrevClip.xyz /= PrevClip.w;
-	float3 Velocity = float3(Input.PositionNDC - PrevClip.xy, Input.DeviceZ - PrevClip.z);
+	float2 ClipPos = ((Input.Mean.xy * PrimaryView.ViewSizeAndInvSize.zw * 2.0f) - 1.0f) * float2(1.0f, -1.0f);
+
+	// Calculate previous clip position from world position
+	float3 PrevTranslatedWorldPos = Input.TranslatedWorldPosition + DFSubtractDemote(PrimaryView.PrevPreViewTranslation, PrimaryView.PreViewTranslation);
+	float4 PrevClipPos = mul(float4(PrevTranslatedWorldPos, 1.0f), PrimaryView.PrevTranslatedWorldToClip);
+	PrevClipPos.xyz /= PrevClipPos.w;
+
+	// Remove jitter
+	ClipPos -= PrimaryView.TemporalAAJitter.xy;
+	PrevClipPos.xy -= PrimaryView.TemporalAAJitter.zw;
+
+	float3 Velocity = float3(ClipPos - PrevClipPos.xy, Input.DeviceZ - PrevClipPos.z);
 
 	Output.Velocity = EncodeVelocityToTexture(Velocity);
 #endif

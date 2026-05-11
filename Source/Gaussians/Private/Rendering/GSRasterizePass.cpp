@@ -192,6 +192,8 @@ void FGSViewExtension::GaussianSplattingPass(
 	bool bAnySplatsRendered = false;
 	for (auto Proxy : Proxies)
 	{
+		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: PrePass");
+
 		FBoxSphereBounds ProxyBounds = Proxy->GetBounds();
 		if (!InView.GetCullingFrustum().IntersectBox(ProxyBounds.Origin, ProxyBounds.BoxExtent))
 		{
@@ -284,6 +286,8 @@ void FGSViewExtension::GaussianSplattingPass(
 
 	// Rasterize splats into the render target
 	{
+		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Rasterization");
+
 		auto PassParameters = GraphBuilder.AllocParameters<FSplattingPassPipelineParameters>();
 
 		PassParameters->VertexShader.View = InView.ViewUniformBuffer;

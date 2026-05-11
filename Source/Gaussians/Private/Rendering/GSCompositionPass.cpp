@@ -57,6 +57,8 @@ void FGSViewExtension::GSCompositionPass(
 	const FGSplatGBuffer& GSplatGBuffer
 )
 {
+	RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: GSplatGBuffer Composition");
+
 	check(IsInRenderingThread());
 	check(InView.bIsViewInfo);
 	const FViewInfo& ViewInfo = static_cast<const FViewInfo&>(InView);
