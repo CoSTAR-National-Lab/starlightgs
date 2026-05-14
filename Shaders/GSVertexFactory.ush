@@ -1,0 +1,289 @@
+
+#include "/Engine/Private/VertexFactoryCommon.ush"
+#include "/Engine/Private/Quaternion.ush"
+#include "/Engine/Generated/GeneratedUniformBuffers.ush"
+
+#undef GetInstanceIdFromVF
+#define GetInstanceIdFromVF(VFInput)				(VFInput.InstanceId)
+
+struct FVertexFactoryInput
+{
+    uint VertexId : SV_VertexID;
+    uint InstanceId : SV_InstanceID;
+	VF_MOBILE_MULTI_VIEW_DECLARE_INPUT_BLOCK()
+};
+
+float3 GetSplatPosition(uint SplatID)
+{
+    return GSResources.Positions[SplatID];
+}
+
+float3 GetSplatScale(uint SplatID)
+{
+    return GSResources.Scales[SplatID];
+}
+
+float4 GetSplatRotation(uint SplatID)
+{
+    return GSResources.Orientations[SplatID];
+}
+
+/** Cached intermediates that would otherwise have to be computed multiple times. Avoids relying on the compiler to optimize out redundant operations. */
+struct FVertexFactoryIntermediates
+{
+    float4 LocalPos;
+	/** Cached primitive and instance data */
+    FSceneDataIntermediates SceneData;
+};
+
+
+
+FPrimitiveSceneData GetPrimitiveData(FVertexFactoryIntermediates Intermediates)
+{
+    return Intermediates.SceneData.Primitive;
+}
+
+/** Attributes to interpolate from the vertex shader to the pixel shader. */
+struct FVertexFactoryInterpolantsVSToPS
+{
+#if NUM_TEX_COORD_INTERPOLATORS
+	float4 TexCoords[(NUM_TEX_COORD_INTERPOLATORS + 1) / 2] : TEXCOORD0;
+#endif
+};
+
+/** Compute the intermediates for a given vertex. */
+FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput Input)
+{
+    FVertexFactoryIntermediates Intermediates;
+    Intermediates.SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
+
+    static float2 Quad[4] =
+    {
+    	float2(-1, -1),
+		float2(-1, 1),
+		float2(1, -1),
+		float2(1, 1)
+    };
+
+	Intermediates.LocalPos = float4(Quad[Input.VertexId % 4], 0, 1) * 100;
+    //Intermediates.LocalPos = DFTransformLocalToTranslatedWorld(Intermediates.LocalPos, GetPrimitiveData(Intermediates).LocalToWorld, PreViewTranslation);
+
+	float3 SplatPosition = GetSplatPosition(Input.InstanceId);
+	float3 SplatScale = GetSplatScale(Input.InstanceId);
+	float4 SplatRotation = GetSplatRotation(Input.InstanceId);
+	
+    return Intermediates;
+}
+
+// RHI_RAYTRACING
+#if COMPUTESHADER || RAYHITGROUPSHADER
+FVertexFactoryInput LoadVertexFactoryInputForHGS(uint TriangleIndex, int VertexIndex)
+{
+	// For 4 verts cutout geometry and normal particle geometry, use the typical 6 indices
+	FVertexFactoryInput Input;
+	
+	uint IndexBuffer[6] = { 0, 2, 3, 0, 1, 2 };
+	uint VertexId = IndexBuffer[(TriangleIndex * 3 + VertexIndex) % 6];
+	
+	Input.VertexId = VertexId;
+	Input.InstanceId = TriangleIndex / 2;
+	
+	return Input;
+}
+
+FVertexFactoryInput LoadVertexFactoryInputForDynamicUpdate(uint TriangleIndex, int VertexIndex, uint PrimitiveId, uint DrawInstanceId)
+{
+	return LoadVertexFactoryInputForHGS(TriangleIndex, VertexIndex);
+}
+uint GetNumRayTracingDynamicMeshVerticesIndirect()
+{
+	const uint NumVertices = 4;
+	const uint NumInstances = 1; //GSResources.SplatCount;
+	return NumVertices * NumInstances;
+}
+#endif
+
+float3 VertexFactoryGetPreviousInstanceSpacePosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates);
+float3 VertexFactoryGetInstanceSpacePosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates);
+
+/** Converts from vertex factory specific input to a FMaterialVertexParameters, which is used by vertex shader material inputs. */
+FMaterialVertexParameters GetMaterialVertexParameters(
+	FVertexFactoryInput Input,
+	FVertexFactoryIntermediates Intermediates,
+	float3 WorldPosition,
+	half3x3 TangentToLocal,
+	bool bIsPreviousFrame = false)
+{
+    FMaterialVertexParameters Result = MakeInitializedMaterialVertexParameters();
+
+    Result.SceneData = Intermediates.SceneData;
+	
+    Result.WorldPosition = WorldPosition;
+    if (bIsPreviousFrame)
+    {
+        Result.PositionInstanceSpace = VertexFactoryGetPreviousInstanceSpacePosition(Input, Intermediates);
+    }
+    else
+    {
+        Result.PositionInstanceSpace = VertexFactoryGetInstanceSpacePosition(Input, Intermediates);
+    }
+    Result.PositionPrimitiveSpace = Result.PositionInstanceSpace; // No support for instancing, so instance == primitive
+
+    Result.TangentToWorld = TangentToLocal; //Local is world, particles are generated in WS
+
+    Result.PreSkinnedPosition = WorldPosition; 
+    Result.PreSkinnedNormal = float3(0, 0, 1);
+
+
+#if NUM_MATERIAL_TEXCOORDS_VERTEX
+	UNROLL
+	for (int CoordinateIndex = 0; CoordinateIndex < NUM_MATERIAL_TEXCOORDS_VERTEX; CoordinateIndex++)
+	{
+		Result.TexCoords[CoordinateIndex] = Intermediates.LocalPos.xy * 0.01f + 1 / 2.f;
+	}
+#endif  //NUM_MATERIAL_TEXCOORDS_VERTEX
+
+    Result.LWCData = MakeMaterialLWCData(Result);
+
+    return Result;
+}
+
+/** Get ID in GPU Scene. We don't implement support because we create/consume our own instancing buffer. */
+uint GetPrimitiveId(FVertexFactoryInterpolantsVSToPS Interpolants)
+{
+    return 0;
+}
+
+/** Get ID in the GPU Scene. */
+uint VertexFactoryGetPrimitiveId(FVertexFactoryInterpolantsVSToPS Interpolants)
+{
+    return GetPrimitiveId(Interpolants);
+}
+
+/** Computes the world space position of this vertex. */
+float4 VertexFactoryGetWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+    FDFMatrix LocalToWorld = GetPrimitiveData(Intermediates).LocalToWorld;
+    return TransformLocalToTranslatedWorld(Intermediates.LocalPos.xyz, LocalToWorld);
+}
+
+// local position relative to instance
+float3 VertexFactoryGetInstanceSpacePosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+    return Intermediates.LocalPos.xyz; // No support for instancing, so instance == primitive
+}
+
+/** Computes the world space position of this vertex. */
+float4 VertexFactoryGetRasterizedWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, float4 InWorldPosition)
+{
+    //add vertex position to mean position
+
+    return InWorldPosition;
+}
+
+/** Computes the world space position used by vertex lighting for this vertex. */
+float3 VertexFactoryGetPositionForVertexLighting(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, float3 TranslatedWorldPosition)
+{
+    return TranslatedWorldPosition;
+}
+
+/** Computes the world space position of this vertex last frame. */
+float4 VertexFactoryGetPreviousWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+    return DFTransformLocalToTranslatedWorld(Intermediates.LocalPos, GetPrimitiveData(Intermediates).PreviousLocalToWorld, ResolvedView.PrevPreViewTranslation);
+}
+
+/** Computes the instance space position of this vertex last frame. */
+float3 VertexFactoryGetPreviousInstanceSpacePosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+    return Intermediates.LocalPos.xyz; // No support for instancing, so instance == primitive
+}
+
+/** Computes the world space normal of this vertex. */
+float3 VertexFactoryGetWorldNormal(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	//temp;
+    return float3(0,0,1);
+}
+
+/** Get the 3x3 tangent basis vectors for this vertex factory. This vertex factory will calculate the binormal on-the-fly. */
+half3x3 VertexFactoryGetTangentToLocal(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+    return half3x3(1, 0, 0, 0, 1, 0, 0, 0, 1);
+}
+
+/** Get the translated bounding sphere for this primitive. */
+float4 VertexFactoryGetTranslatedPrimitiveVolumeBounds(FVertexFactoryInterpolantsVSToPS Interpolants)
+{
+    FPrimitiveSceneData PrimitiveData = GetPrimitiveData(GetPrimitiveId(Interpolants));
+    return float4(DFFastToTranslatedWorld(PrimitiveData.ObjectWorldPosition, ResolvedView.PreViewTranslation), PrimitiveData.ObjectRadius);
+}
+
+#if NUM_TEX_COORD_INTERPOLATORS
+
+void SetUV(inout FVertexFactoryInterpolantsVSToPS Interpolants, uint UVIndex, float2 InValue)
+{
+	FLATTEN
+	if (UVIndex % 2)
+	{
+		Interpolants.TexCoords[UVIndex / 2].zw = InValue;
+	}
+	else
+	{
+		Interpolants.TexCoords[UVIndex / 2].xy = InValue;
+	}
+}
+
+float2 GetUV(FVertexFactoryInterpolantsVSToPS Interpolants, uint UVIndex)
+{
+	float4 UVVector = Interpolants.TexCoords[UVIndex / 2];
+	return UVIndex % 2 ? UVVector.zw : UVVector.xy;
+}
+
+#endif
+
+/** Constructs values that need to be interpolated from the vertex shader to the pixel shader. */
+FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, FMaterialVertexParameters VertexParameters)
+{
+    FVertexFactoryInterpolantsVSToPS Interpolants;
+
+	// Initialize the whole struct to 0
+	// Really only the last two components of the packed UVs have the opportunity to be uninitialized
+    Interpolants = (FVertexFactoryInterpolantsVSToPS) 0;
+
+#if NUM_TEX_COORD_INTERPOLATORS
+	float2 CustomizedUVs[NUM_TEX_COORD_INTERPOLATORS];
+	GetMaterialCustomizedUVs(VertexParameters, CustomizedUVs);
+	GetCustomInterpolators(VertexParameters, CustomizedUVs);
+
+	UNROLL
+	for (int CoordinateIndex = 0; CoordinateIndex < NUM_TEX_COORD_INTERPOLATORS; CoordinateIndex++)
+	{
+		SetUV(Interpolants, CoordinateIndex, CustomizedUVs[CoordinateIndex]);
+	}
+#endif
+
+    return Interpolants;
+}
+
+/** Converts from vertex factory specific interpolants to a FMaterialPixelParameters, which is used by material inputs. */
+FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVSToPS Interpolants, float4 SvPosition)
+{
+	// GetMaterialPixelParameters is responsible for fully initializing the result
+    FMaterialPixelParameters Result = MakeInitializedMaterialPixelParameters();
+
+#if NUM_TEX_COORD_INTERPOLATORS
+	UNROLL
+	for (uint CoordinateIndex = 0; CoordinateIndex < NUM_TEX_COORD_INTERPOLATORS; CoordinateIndex++)
+	{
+		Result.TexCoords[CoordinateIndex] = GetUV(Interpolants, CoordinateIndex);
+	}
+#endif	//NUM_MATERIAL_TEXCOORDS
+
+    //Result.TwoSidedSign = 1;
+    Result.PrimitiveId = GetPrimitiveId(Interpolants);
+
+    return Result;
+}
+
+#include "/Engine/Private/VertexFactoryDefaultInterface.ush"

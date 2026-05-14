@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GaussianSplatVertexFactory.h"
 #include "PrimitiveSceneProxy.h"
 
 
@@ -37,6 +38,7 @@ public:
 	FGaussianSplatResource* GetResource_RenderThread() const;
 
 	bool SupportsRelighting() const;
+	virtual void DrawStaticElements(FStaticPrimitiveDrawInterface* PDI) override;
 
 
 	inline float GetScaleMultiplier() const { return ScaleMultiplier; }
@@ -55,4 +57,7 @@ private:
 
 	// Per-instance properties
 	float ScaleMultiplier = 1.0f;
+
+	//Proxy vertex factory
+	FGaussianSplatVertexFactory VertexFactory;
 };

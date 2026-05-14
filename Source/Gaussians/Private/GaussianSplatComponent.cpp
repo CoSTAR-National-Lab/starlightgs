@@ -47,6 +47,8 @@ void UGaussianSplatComponent::OnUnregister()
 
 FPrimitiveSceneProxy* UGaussianSplatComponent::CreateSceneProxy()
 {
+	bCastDynamicShadow = true;
+
 	return new FGaussianSplatSceneProxy(this);
 }
 
