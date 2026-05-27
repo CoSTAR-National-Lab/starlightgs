@@ -10,8 +10,12 @@ IMPLEMENT_VERTEX_FACTORY_TYPE(FGaussianSplatVertexFactory, "/Plugin/Gaussians/GS
 	  EVertexFactoryFlags::UsedWithMaterials
 	| EVertexFactoryFlags::SupportsDynamicLighting
 	| EVertexFactoryFlags::SupportsStaticLighting
-	| EVertexFactoryFlags::SupportsManualVertexFetch
-//	| EVertexFactoryFlags::SupportsPositionOnly
+	//| EVertexFactoryFlags::SupportsManualVertexFetch
+	| EVertexFactoryFlags::SupportsPositionOnly
+	//| EVertexFactoryFlags::SupportsPrecisePrevWorldPos
+	//| EVertexFactoryFlags::SupportsCachingMeshDrawCommands
+	| EVertexFactoryFlags::SupportsPrimitiveIdStream
+	//| EVertexFactoryFlags::SupportsTriangleSorting
 	//| EVertexFactoryFlags::SupportsRayTracing
 	//| EVertexFactoryFlags::SupportsRayTracingDynamicGeometry
 	//| EVertexFactoryFlags::SupportsPSOPrecaching
@@ -20,7 +24,7 @@ IMPLEMENT_VERTEX_FACTORY_TYPE(FGaussianSplatVertexFactory, "/Plugin/Gaussians/GS
 FGaussianSplatVertexFactory::FGaussianSplatVertexFactory(ERHIFeatureLevel::Type InFeatureLevel) : FVertexFactory(InFeatureLevel)
 {
 	//we dont need declartion as we are fetching data from buffers directly
-	bNeedsDeclaration = false; // it will crash still if you do not create a declaration
+	//bNeedsDeclaration = false; // it will crash still if you do not create a declaration // this literally appears to do absolutely nothing 
 };
 
 class FGaussianSplatVertexFactoryShaderParameters : public FVertexFactoryShaderParameters
@@ -46,6 +50,7 @@ public:
 	{
 		FVertexFactoryShaderParameters::GetElementShaderBindings(Scene, View, Shader, VertexStreamType, FeatureLevel, VertexFactory, BatchElement, ShaderBindings, VertexStreams);
 
+
 		const FGaussianSplatVertexFactory* SplateVF = static_cast<const FGaussianSplatVertexFactory*>(VertexFactory);
 		ShaderBindings.Add(Shader->GetUniformBufferParameter<FGaussianSplatShaderResources>(), SplateVF->GetGSplatDataUniformBuffer());
 		
@@ -63,15 +68,61 @@ IMPLEMENT_VERTEX_FACTORY_PARAMETER_TYPE(FGaussianSplatVertexFactory, SF_RayHitGr
 
 bool FGaussianSplatVertexFactory::ShouldCompilePermutation(const FVertexFactoryShaderPermutationParameters& Parameters)
 {
-	if (Parameters.MaterialParameters.bIsMasked || Parameters.MaterialParameters.bIsSpecialEngineMaterial) 
-		return true;
+	//if (Parameters.MaterialParameters.bIsMasked || Parameters.MaterialParameters.bIsSpecialEngineMaterial) 
+	return true;
+}
 
-	//if (Parameters.MaterialParameters.bIsUsedWithNiagaraSprites)
-	//	return true;
+void FGaussianSplatVertexFactory::GetPSOPrecacheVertexFetchElements(EVertexInputStreamType VertexInputStreamType,
+	FVertexDeclarationElementList& Elements)
+{
+	/*if (UseGPUScene(GMaxRHIShaderPlatform, GMaxRHIFeatureLevel)
+			&& !PlatformGPUSceneUsesUniformBufferView(GMaxRHIShaderPlatform))
+	{
+		switch (VertexInputStreamType)
+		{
+		case EVertexInputStreamType::Default:
+		{
+			Elements.Add(FVertexElement(0, 0, VET_UInt, 0, sizeof(uint32), true));
+			break;
+		}
+		case EVertexInputStreamType::PositionOnly:
+		{
+			Elements.Add(FVertexElement(0, 0, VET_UInt, 0, sizeof(uint32), true));
+			break;
+		}
+		case EVertexInputStreamType::PositionAndNormalOnly:
+		{
+			Elements.Add(FVertexElement(0, 0, VET_UInt, 0, sizeof(uint32), true));
+			break;
+		}
+		default:
+			checkNoEntry();
+		}
+	}*/
+}
 
+void FGaussianSplatVertexFactory::ValidateCompiledResult(const FVertexFactoryType* Type, EShaderPlatform Platform,
+                                                         const FShaderParameterMap& ParameterMap, TArray<FString>& OutErrors)
+{
+	if (Type->SupportsPrimitiveIdStream()
+		&& UseGPUScene(Platform, GetMaxSupportedFeatureLevel(Platform))
+		&& !IsMobilePlatform(Platform) // On mobile VS may use PrimtiveUB while GPUScene is enabled
+		&& ParameterMap.ContainsParameterAllocation(FPrimitiveUniformShaderParameters::FTypeInfo::GetStructMetadata()->GetShaderVariableName()))
+	{
+		OutErrors.AddUnique(*FString::Printf(TEXT("Shader attempted to bind the Primitive uniform buffer even though Vertex Factory %s computes a PrimitiveId per-instance.  This will break auto-instancing.  Shaders should use GetPrimitiveData(Parameters).Member instead of Primitive.Member."), Type->GetName()));
+	}
+}
 
+void FGaussianSplatVertexFactory::ModifyCompilationEnvironment(
+	const FVertexFactoryShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+{
+	if (RHISupportsManualVertexFetch(Parameters.Platform))
+	{
+		OutEnvironment.SetDefineIfUnset(TEXT("MANUAL_VERTEX_FETCH"), TEXT("1"));
+	}
 
-	return false;
+	const bool bVFSupportsPrimtiveSceneData = Parameters.VertexFactoryType->SupportsPrimitiveIdStream() && UseGPUScene(Parameters.Platform, GetMaxSupportedFeatureLevel(Parameters.Platform));
+	OutEnvironment.SetDefine(TEXT("VF_SUPPORTS_PRIMITIVE_SCENE_DATA"), bVFSupportsPrimtiveSceneData);
 }
 
 void FGaussianSplatVertexFactory::InitRHI(FRHICommandListBase& RHICmdList)
@@ -90,23 +141,18 @@ void FGaussianSplatVertexFactory::InitRHI(FRHICommandListBase& RHICmdList)
 	check(Streams.Num() == 0);
 	Streams.Add(NullVertexStream);
 
-	FVertexDeclarationElementList Elements;
+	FVertexDeclarationElementList ElementsDefault;
+	FVertexDeclarationElementList ElementsPosOnly;
+	FVertexDeclarationElementList ElementsPosNormal;
 	//Elements.Add(FVertexElement(0, 0, VET_None, 0, 0, false));
 
-	
-#if 0
-	const bool bCanUseGPUScene = UseGPUScene(GMaxRHIShaderPlatform, GMaxRHIFeatureLevel);
+	AddPrimitiveIdStreamElement(EVertexInputStreamType::Default, ElementsDefault, 0, 0);
+	AddPrimitiveIdStreamElement(EVertexInputStreamType::PositionOnly, ElementsPosOnly, 0, 0);
+	AddPrimitiveIdStreamElement(EVertexInputStreamType::PositionAndNormalOnly, ElementsPosNormal, 0, 0);
 
-	// Add support for primitiveID
-	const uint8 Index = static_cast<uint8>(EVertexInputStreamType::Default);
-	PrimitiveIdStreamIndex[Index] = -1;
-	if (GetType()->SupportsPrimitiveIdStream() && bCanUseGPUScene)
-	{
-		// When the VF is used for rendering in normal mesh passes, this vertex buffer and offset will be overridden
-		Elements.Add(AccessStreamComponent(FVertexStreamComponent(&GPrimitiveIdDummy, 0, 0, sizeof(uint32), VET_UInt, EVertexStreamUsage::Instancing), 13));
-		PrimitiveIdStreamIndex[Index] = Elements.Last().StreamIndex;
-	}
-#endif
+	//all declarations are identical
 
-	InitDeclaration(Elements);
+	InitDeclaration(ElementsDefault);
+	InitDeclaration(ElementsPosOnly, EVertexInputStreamType::PositionOnly);
+	InitDeclaration(ElementsPosNormal, EVertexInputStreamType::PositionAndNormalOnly);
 }

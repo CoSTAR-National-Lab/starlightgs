@@ -155,6 +155,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_
 			if (v_length > 1e-6)
 			{
 				v = v / v_length;
+
 				MajorEigenvalue = v_length;
 			}
 		}

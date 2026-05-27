@@ -60,4 +60,5 @@ private:
 
 	//Proxy vertex factory
 	FGaussianSplatVertexFactory VertexFactory;
+	FMaterialRenderProxy* ShadowMaterialProxy;
 };

@@ -3,49 +3,229 @@
 #include "/Engine/Private/Quaternion.ush"
 #include "/Engine/Generated/GeneratedUniformBuffers.ush"
 
-#undef GetInstanceIdFromVF
-#define GetInstanceIdFromVF(VFInput)				(VFInput.InstanceId)
-
+//general input
 struct FVertexFactoryInput
 {
     uint VertexId : SV_VertexID;
-    uint InstanceId : SV_InstanceID;
+
+#if USE_INSTANCING
+	#undef GetInstanceIdFromVF
+	#define GetInstanceIdFromVF(VFInput)				(VFInput.InstanceId)
+	uint InstanceId	: SV_InstanceID;
+#else
+	VF_INSTANCED_STEREO_DECLARE_INPUT_BLOCK()
+#endif
 	VF_MOBILE_MULTI_VIEW_DECLARE_INPUT_BLOCK()
+
+	VF_GPUSCENE_DECLARE_INPUT_BLOCK(0)
 };
-
-float3 GetSplatPosition(uint SplatID)
-{
-    return GSResources.Positions[SplatID];
-}
-
-float3 GetSplatScale(uint SplatID)
-{
-    return GSResources.Scales[SplatID];
-}
-
-float4 GetSplatRotation(uint SplatID)
-{
-    return GSResources.Orientations[SplatID];
-}
 
 /** Cached intermediates that would otherwise have to be computed multiple times. Avoids relying on the compiler to optimize out redundant operations. */
 struct FVertexFactoryIntermediates
 {
     float4 LocalPos;
+    float4 WorldPosition;
+  
+    float3 Normal;
+    float2 Size;
+    float3 Conic;
+    float3 MeanCS;
+    float Opacity;
+    float Rotation; 
+
 	/** Cached primitive and instance data */
     FSceneDataIntermediates SceneData;
 };
 
+//doesnt chage form vertex factory input, can reuse
+#define FPositionOnlyVertexFactoryInput FVertexFactoryInput
+#define FPositionAndNormalOnlyVertexFactoryInput FVertexFactoryInput
 
+//as we are reusing them, must create implementation for default VF InstanceIDLoadIndex as it is
+
+#define VF_IMPLEMENTED_GET_SCENE_DATA_INTERMEDIATES
+
+FSceneDataIntermediates GetSceneDataIntermediates(FVertexFactoryIntermediates Intermediates)
+{
+    return Intermediates.SceneData;
+}
+
+#define VF_IMPLEMENTED_GET_VIEW_INDEX
+
+uint VertexFactoryGetViewIndex(FVertexFactoryIntermediates Intermediates)
+{
+    return GetSceneDataIntermediates(Intermediates).ViewIndex;
+}
+
+uint VertexFactoryGetInstanceIdLoadIndex(FVertexFactoryIntermediates Intermediates)
+{
+    return GetSceneDataIntermediates(Intermediates).InstanceIdLoadIndex;
+}
+
+FDFMatrix VertexFactoryGetLocalToWorld(FVertexFactoryIntermediates Intermediates)
+{
+    return GetSceneDataIntermediates(Intermediates).InstanceData.LocalToWorld;
+}
+
+FDFInverseMatrix VertexFactoryGetWorldToLocal(FVertexFactoryIntermediates Intermediates)
+{
+    return GetSceneDataIntermediates(Intermediates).InstanceData.WorldToLocal;
+}
+
+#if POSITION_ONLY
+
+uint VertexFactoryGetViewIndex(FPositionOnlyVertexFactoryInput Input)
+{
+	FSceneDataIntermediates SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
+	return SceneData.ViewIndex;
+}
+
+uint VertexFactoryGetInstanceIdLoadIndex(FPositionOnlyVertexFactoryInput Input)
+{
+	FSceneDataIntermediates SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
+	return SceneData.InstanceIdLoadIndex;
+}
+
+#endif // POSITION_ONLY
 
 FPrimitiveSceneData GetPrimitiveData(FVertexFactoryIntermediates Intermediates)
 {
     return Intermediates.SceneData.Primitive;
 }
 
+float3x3 VecToScaleMatrix(in float3 Scale)
+{
+    return float3x3(
+		Scale.x, 0.0f, 0.0f,
+		0.0f, Scale.y, 0.0f,
+		0.0f, 0.0f, Scale.z
+	);
+}
+
+//Compute Tangent
+
+void GetTangents(float Rotation, out float3 OutRight, out float3 OutUp)
+{
+    float3 ResolvedViewRight = ResolvedView.ViewRight;
+    float3 ResolvedViewUp = ResolvedView.ViewUp;
+
+	// The standard camera facing vectors
+    float3 CameraRight = ResolvedViewRight;
+    float3 CameraUp = -ResolvedViewUp;
+    float3 CameraFacingVector = -ResolvedView.ViewForward;
+
+    float3 Right = CameraRight.xyz;
+    float3 Up = CameraUp.xyz;
+
+	// Determine the angle of rotation.
+    float SinRotation;
+    float CosRotation;
+    sincos(Rotation, SinRotation, CosRotation);
+
+    float3 SR = Right * SinRotation;
+    float3 SU = Up * SinRotation;
+    float3 CR = Right * CosRotation;
+    float3 CU = Up * CosRotation;
+    OutRight = SU + CR;
+    OutUp = CU - SR;
+}
+
+void ComputeSplatParameters(in FPrimitiveSceneData Primitive, in uint SplatIndex, out float2 OutSize, out float OutRotation, out float3 OutWorldNormal, out float3 OutMeanWS, out float3 OutMeanCS, out float3 OutConic)
+{
+    float3 LocalPosition = GSResources.Positions[SplatIndex];
+
+    FDFMatrix LocalToWorld = Primitive.LocalToWorld;
+    float4 TranslatedWorldPosition = TransformLocalToTranslatedWorld(LocalPosition, LocalToWorld);
+
+    OutMeanWS = TranslatedWorldPosition.xyz;
+
+    float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz);
+    float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(GSResources.Orientations[SplatIndex]));
+
+	// Calculate covariance matrix
+    float3x3 T = mul(RotationMatrix, ScaleMatrix);
+    float3x3 Covariance3D = mul(T, transpose(T));
+
+    // Fixes all the maths...
+    TranslatedWorldPosition.xyz *= 0.01f;
+
+    float4 ViewPosition = mul(TranslatedWorldPosition, PrimaryView.TranslatedWorldToView);
+
+    float4 ClipPosition = mul(ViewPosition, PrimaryView.ViewToClip);
+    ClipPosition /= ClipPosition.w;
+
+	// Calculate Jacobian matrix based off of projection matrix
+	// Jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
+    float FocalZ = PrimaryView.ViewSizeAndInvSize.y / (2.0f * PrimaryView.TanAndInvTanHalfFOV.y);
+
+    float LimX = 1.3f * PrimaryView.TanAndInvTanHalfFOV.x;
+    float LimY = 1.3f * PrimaryView.TanAndInvTanHalfFOV.y;
+
+    float TxTz = ViewPosition.x / ViewPosition.z;
+    float TyTz = ViewPosition.y / ViewPosition.z;
+
+	// Clamped versions of TxTz and TyTz 
+    float Tx = min(LimX, max(-LimX, TxTz)) * ViewPosition.z;
+    float TY = min(LimY, max(-LimY, TyTz)) * ViewPosition.z;
+
+    float3x3 J = float3x3(
+		        FocalZ / ViewPosition.z, 0.0f, -(FocalZ * Tx) / (ViewPosition.z * ViewPosition.z),
+		        0.0f, FocalZ / ViewPosition.z, -(FocalZ * TY) / (ViewPosition.z * ViewPosition.z),
+				0.0f, 0.0f, 0.0f
+			);
+
+    //USING INVERSE OF VIEW HERE
+    float3x3 JW = mul(J, transpose((float3x3) PrimaryView.ViewToTranslatedWorld));
+    float3x3 Covariance2D = mul(JW, mul(transpose(Covariance3D), transpose(JW)));
+
+    float X = Covariance2D[0][0] + 0.3f;
+    float Y = Covariance2D[1][1] + 0.3f;
+    float Covariance = Covariance2D[0][1];
+
+		    // Determine conic for the splat
+    float Determinant = X * Y - Covariance * Covariance;
+    float3 Conic = float3(Y, Covariance, X) / Determinant;
+	
+	// Finally calculate the bounds of a screenspace quad that will be rasterized for this splat
+    float Mid = (X + Y);
+    float Delta = length(float2((X - Y), (2 * Covariance)));
+			
+    float Lambda1 = 0.5f * (Mid + Delta);
+    float Lambda2 = 0.5f * (Mid - Delta);
+
+    if (Lambda2 > 0.0f)
+    {
+        OutRotation = 360 * atan2(Lambda1 - X, Covariance) / (2 * PI);
+
+        float2 Size = float2(Lambda1, Lambda2);
+
+        OutSize = Size * ViewPosition.z * max(PrimaryView.TanAndInvTanHalfFOV.x, PrimaryView.TanAndInvTanHalfFOV.y);
+
+        float3 LocalNormal = GSResources.Normals[SplatIndex];
+        OutWorldNormal = RotateLocalToWorld(LocalNormal, Primitive.LocalToWorld, Primitive.InvNonUniformScale);
+
+        OutMeanCS = ClipPosition;
+        OutConic = Conic;
+       
+    }
+    else
+    {
+        OutSize = float2(0, 0);
+        OutRotation = 0;
+        OutMeanCS = float3( 0, 0, 0);
+        OutMeanWS = float3( 0, 0, 0);
+        OutWorldNormal = float3(0, 0, 0);
+    }
+
+}
+
 /** Attributes to interpolate from the vertex shader to the pixel shader. */
 struct FVertexFactoryInterpolantsVSToPS
 {
+    float3 MeanCS : MEAN;
+    float3 Conic : CONIC;
+    float  Opacity : OPACITY;
+
 #if NUM_TEX_COORD_INTERPOLATORS
 	float4 TexCoords[(NUM_TEX_COORD_INTERPOLATORS + 1) / 2] : TEXCOORD0;
 #endif
@@ -57,21 +237,46 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
     FVertexFactoryIntermediates Intermediates;
     Intermediates.SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
 
-    static float2 Quad[4] =
+    static float2 Quad[6] =
     {
     	float2(-1, -1),
 		float2(-1, 1),
 		float2(1, -1),
-		float2(1, 1)
+		float2(1, -1),
+		float2(-1, 1),
+    	float2(1, 1)
     };
 
-	Intermediates.LocalPos = float4(Quad[Input.VertexId % 4], 0, 1) * 100;
-    //Intermediates.LocalPos = DFTransformLocalToTranslatedWorld(Intermediates.LocalPos, GetPrimitiveData(Intermediates).LocalToWorld, PreViewTranslation);
+    uint splatIndex = Input.VertexId / 6;
 
-	float3 SplatPosition = GetSplatPosition(Input.InstanceId);
-	float3 SplatScale = GetSplatScale(Input.InstanceId);
-	float4 SplatRotation = GetSplatRotation(Input.InstanceId);
-	
+    float4 Position = float4(GSResources.Positions[splatIndex], 0);
+
+    Intermediates.LocalPos = Position + float4(Quad[Input.VertexId % 6], 0, 1);
+    
+    float2 SplatSize;
+    float  SplatRotation;
+    float3 SplatNormal;
+    float3 SplatMeanWS;
+    float3 SplatMeanCS;
+    float3 SplatConic;
+
+
+    ComputeSplatParameters(Intermediates.SceneData.Primitive, splatIndex, SplatSize, SplatRotation, SplatNormal, SplatMeanWS, SplatMeanCS, SplatConic);
+
+    float3 Up;
+    float3 Right;
+
+    GetTangents(SplatRotation, Right, Up);
+
+    float2 Vertex = Quad[Input.VertexId % 6];
+
+    Intermediates.WorldPosition = float4(SplatMeanWS + Vertex.x * Right * SplatSize.x + Vertex.y * Up * SplatSize.y, 1);
+
+    Intermediates.Normal = SplatNormal;
+    Intermediates.Conic = SplatConic;
+    Intermediates.MeanCS = SplatMeanCS;
+    Intermediates.Opacity = GSResources.SHAndOpacities[splatIndex].w;
+
     return Intermediates;
 }
 
@@ -108,6 +313,7 @@ float3 VertexFactoryGetInstanceSpacePosition(FVertexFactoryInput Input, FVertexF
 
 /** Converts from vertex factory specific input to a FMaterialVertexParameters, which is used by vertex shader material inputs. */
 FMaterialVertexParameters GetMaterialVertexParameters(
+
 	FVertexFactoryInput Input,
 	FVertexFactoryIntermediates Intermediates,
 	float3 WorldPosition,
@@ -163,8 +369,10 @@ uint VertexFactoryGetPrimitiveId(FVertexFactoryInterpolantsVSToPS Interpolants)
 /** Computes the world space position of this vertex. */
 float4 VertexFactoryGetWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
 {
-    FDFMatrix LocalToWorld = GetPrimitiveData(Intermediates).LocalToWorld;
-    return TransformLocalToTranslatedWorld(Intermediates.LocalPos.xyz, LocalToWorld);
+    //FDFMatrix LocalToWorld = GetPrimitiveData(Intermediates).LocalToWorld;
+    //return TransformLocalToTranslatedWorld(Intermediates.LocalPos.xyz, LocalToWorld);
+
+    return Intermediates.WorldPosition;
 }
 
 // local position relative to instance
@@ -176,8 +384,6 @@ float3 VertexFactoryGetInstanceSpacePosition(FVertexFactoryInput Input, FVertexF
 /** Computes the world space position of this vertex. */
 float4 VertexFactoryGetRasterizedWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, float4 InWorldPosition)
 {
-    //add vertex position to mean position
-
     return InWorldPosition;
 }
 
@@ -203,7 +409,49 @@ float3 VertexFactoryGetPreviousInstanceSpacePosition(FVertexFactoryInput Input, 
 float3 VertexFactoryGetWorldNormal(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
 {
 	//temp;
-    return float3(0,0,1);
+    return Intermediates.Normal;
+}
+
+/** X for depth-only, PositionOnly Shaders  */
+float4 VertexFactoryGetWorldPosition(FPositionOnlyVertexFactoryInput Input)
+{
+    FSceneDataIntermediates SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
+    FDFMatrix LocalToWorld = SceneData.Primitive.LocalToWorld;
+
+    static float2 Quad[6] =
+    {
+        float2(-1, -1),
+		float2(-1, 1),
+		float2(1, -1),
+		float2(1, -1),
+		float2(-1, 1),
+    	float2(1, 1)
+    };
+
+    uint splatIndex = Input.VertexId / 6;
+
+    float4 Position = float4(GSResources.Positions[splatIndex], 0);
+
+    float4 LocalPos = Position + float4(Quad[Input.VertexId % 6], 0, 1);
+
+    return TransformLocalToTranslatedWorld(LocalPos.xyz, LocalToWorld);
+}
+
+float3 VertexFactoryGetWorldNormal(FPositionAndNormalOnlyVertexFactoryInput Input)
+{
+	FSceneDataIntermediates SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
+    FDFMatrix LocalToWorld = SceneData.Primitive.LocalToWorld;
+    float3 InvScale = SceneData.Primitive.InvNonUniformScale;
+
+    uint splatIndex = Input.VertexId / 6;
+    float3 Normal = GSResources.Normals[splatIndex];
+
+#if USE_INSTANCING
+	const float3 InstanceTransformedNormal = mul(float4(Normal, 0), GetInstanceTransform(Input)).xyz;
+	return RotateLocalToWorld(InstanceTransformedNormal, LocalToWorld, InvScale);
+#else
+    return RotateLocalToWorld(Normal, LocalToWorld, InvScale);
+#endif
 }
 
 /** Get the 3x3 tangent basis vectors for this vertex factory. This vertex factory will calculate the binormal on-the-fly. */
@@ -251,6 +499,10 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(FVertexFacto
 	// Really only the last two components of the packed UVs have the opportunity to be uninitialized
     Interpolants = (FVertexFactoryInterpolantsVSToPS) 0;
 
+    Interpolants.Conic = Intermediates.Conic;
+    Interpolants.MeanCS = Intermediates.MeanCS;
+    Interpolants.Opacity = Intermediates.Opacity;
+
 #if NUM_TEX_COORD_INTERPOLATORS
 	float2 CustomizedUVs[NUM_TEX_COORD_INTERPOLATORS];
 	GetMaterialCustomizedUVs(VertexParameters, CustomizedUVs);
@@ -267,7 +519,7 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(FVertexFacto
 }
 
 /** Converts from vertex factory specific interpolants to a FMaterialPixelParameters, which is used by material inputs. */
-FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVSToPS Interpolants, float4 SvPosition)
+FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVSToPS Interpolants, in out float4 SvPosition)
 {
 	// GetMaterialPixelParameters is responsible for fully initializing the result
     FMaterialPixelParameters Result = MakeInitializedMaterialPixelParameters();
@@ -280,9 +532,20 @@ FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVS
 	}
 #endif	//NUM_MATERIAL_TEXCOORDS
 
+    float2 DistanceFromMean = (Interpolants.MeanCS.xy - SvPosition.xy);
+
+    float Power = dot(Interpolants.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
+    float Alpha = exp(Power) * Interpolants.Opacity;
+    
+    //writeDepth;
+    SvPosition.zw *= Alpha;
+
     //Result.TwoSidedSign = 1;
     Result.PrimitiveId = GetPrimitiveId(Interpolants);
 
+    Result.VertexColor = float4(0.2, 1, 1, 1);
+
+      
     return Result;
 }
 

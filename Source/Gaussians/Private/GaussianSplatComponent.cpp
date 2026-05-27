@@ -48,6 +48,9 @@ void UGaussianSplatComponent::OnUnregister()
 FPrimitiveSceneProxy* UGaussianSplatComponent::CreateSceneProxy()
 {
 	bCastDynamicShadow = true;
+	//GetUsedMaterials(OuMaterials)
+
+
 
 	return new FGaussianSplatSceneProxy(this);
 }
@@ -65,6 +68,15 @@ FBoxSphereBounds UGaussianSplatComponent::CalcBounds(const FTransform& LocalToWo
 	}
 
 	return FBoxSphereBounds{ };
+}
+
+void UGaussianSplatComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials) const
+{
+	Super::GetUsedMaterials(OutMaterials, bGetDebugMaterials);
+	
+	//register material used for splats if any, this will propagate to proxy and permute shader with custom vertex factory.
+	if (SplatMaterial)
+		OutMaterials.Add(SplatMaterial);
 }
 
 void UGaussianSplatComponent::OnAssetUpdated()

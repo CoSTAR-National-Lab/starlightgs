@@ -1,5 +1,7 @@
 #include "GaussianSplatSceneProxy.h"
 
+#include <devicetopology.h>
+
 #include "DynamicMeshBuilder.h"
 #include "GaussianSplatComponent.h"
 #include "GaussianSplatResource.h"
@@ -20,6 +22,16 @@ FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(UGaussianSplatComponent* InCo
 		// Get GPU resources from asset
 		// This pointer can be assigned from game thread but NOT dereferenced
 		GaussianSplatResource_RenderThread = InComponent->GaussianSplatAsset->GetOrCreateResource();
+	}
+
+	if(InComponent->SplatMaterial)
+	{
+		ShadowMaterialProxy = InComponent->SplatMaterial->GetRenderProxy();
+	}
+	else
+	{
+		ShadowMaterialProxy = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy();
+		
 	}
 
 	// Get view extension from world subsystem
@@ -102,14 +114,21 @@ uint32 FGaussianSplatSceneProxy::GetMemoryFootprint() const
 
 FPrimitiveViewRelevance FGaussianSplatSceneProxy::GetViewRelevance(const FSceneView* View) const
 {
+
+	//To draw shadow only draw relevance must be off
+	// shadow relevance must be IsShadowCast.
+
 	FPrimitiveViewRelevance Result;
-	Result.bDrawRelevance = IsShown(View);
+
+	Result.bDrawRelevance = IsShown(View); // View->Family->EngineShowFlags.HitProxies; //IsShown(View); //false;// ; // to draw only shadows
 	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
 	Result.bRenderInMainPass = ShouldRenderInMainPass();
 	Result.bRenderInDepthPass = ShouldRenderInDepthPass();
 	Result.bUsesLightingChannels = GetLightingChannelMask() != GetDefaultLightingChannelMask();
-	Result.bTranslucentSelfShadow = bCastVolumetricTranslucentShadow;
+	Result.bTranslucentSelfShadow = bCastVolumetricTranslucentShadow; 
+
 	Result.bShadowRelevance = IsShadowCast(View);
+	
 	Result.bDynamicRelevance = true;
 
 	return Result;
@@ -143,27 +162,28 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 				RenderBounds(PDI, ViewFamily.EngineShowFlags, GetBounds(), true);
 			}
 
-
-			if (0 && VertexFactory.IsInitialized())
+			if (VertexFactory.IsInitialized())
 			{
 				auto& RHI = Collector.GetRHICommandList();
 				auto& batch = Collector.AllocateMesh();
 
-				batch.Type = PT_TriangleStrip;
+				batch.Type = PT_TriangleList;
 				batch.bUseForDepthPass = true;
 				batch.CastShadow = true;
+				 
 				batch.CastRayTracedShadow = false;
 				batch.bRenderToVirtualTexture = true;
-				batch.bUseAsOccluder = false;
+				batch.bUseAsOccluder = true;
 				batch.ReverseCulling = IsLocalToWorldDeterminantNegative();
 				batch.DepthPriorityGroup = GetDepthPriorityGroup(Views[ViewIndex]);
 				batch.bCanApplyViewModeOverrides = true;
 				batch.SegmentIndex = 0;
-				batch.MaterialRenderProxy = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy(); // the default one, otherwise should be the render proxy from the asset;
 
+				batch.MaterialRenderProxy = ShadowMaterialProxy;
+				//batch.PreparePrimitiveUniformBuffer(this, GMaxRHIFeatureLevel);
 
 				//auto& VertexFactoryPTR = Collector.AllocateOneFrameResource<FGSOneFrameResource>(Views[ViewIndex]->GetFeatureLevel());
-
+				 
 				//VertexFactoryPTR.VertexFactory.InitResource(RHI);
 				//VertexFactoryPTR.VertexFactory.SetGSplatDataUniformBuffer(GaussianSplatResource_RenderThread->GetResource()->GetUniformBuffer());
 
@@ -173,11 +193,12 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 
 				MeshElement.IndexBuffer = nullptr;
 				MeshElement.FirstIndex = 0;
-				MeshElement.NumPrimitives = 2;
+				MeshElement.NumPrimitives = 2 * 100;
 				MeshElement.NumInstances = 1;
 				MeshElement.MinVertexIndex = 0;
 				MeshElement.MaxVertexIndex = 0;
-				MeshElement.PrimitiveUniformBuffer = GetUniformBuffer();
+				
+				//MeshElement.PrimitiveUniformBuffer = GetUniformBuffer(); // we use primitive id stream and fetch primitive using GPUScene
 
 				Collector.AddMesh(ViewIndex, batch);
 			}
@@ -186,7 +207,7 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 			// Hit proxy building taken from NanoGS:
 			// https://github.com/TimChen1383/NanoGaussianSplatting/blob/main/Plugins/NanoGS/Source/NanoGS/Private/GaussianSplatSceneProxy.cpp
 #if WITH_EDITOR
-			if (ViewFamily.EngineShowFlags.HitProxies || IsSelected())
+			if (ViewFamily.EngineShowFlags.HitProxies)
 			{
 				const FBox LocalBox = GetLocalBounds().GetBox();
 				const FVector3f Min(LocalBox.Min);

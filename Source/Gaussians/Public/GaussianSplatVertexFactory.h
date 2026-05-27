@@ -20,11 +20,14 @@ public:
 	{
 		return true;
 	};
-
 	
 	virtual void InitRHI(FRHICommandListBase& RHICmdList) override;
 	
 	static bool ShouldCompilePermutation(const FVertexFactoryShaderPermutationParameters& Parameters);
+	static void GetPSOPrecacheVertexFetchElements(EVertexInputStreamType VertexInputStreamType, FVertexDeclarationElementList& Elements);
+	static void ValidateCompiledResult(const FVertexFactoryType* Type, EShaderPlatform Platform, const FShaderParameterMap& ParameterMap, TArray<FString>& OutErrors);
+	static void ModifyCompilationEnvironment(const FVertexFactoryShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment);
+
 
 	void SetGSplatDataUniformBuffer(FUniformBufferRHIRef InBuffer) { GSplatDataUniform = InBuffer; }
 	FRHIUniformBuffer* GetGSplatDataUniformBuffer() const { return GSplatDataUniform; }

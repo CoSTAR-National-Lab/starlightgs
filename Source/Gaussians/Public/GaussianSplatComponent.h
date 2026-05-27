@@ -14,7 +14,7 @@ class GAUSSIANS_API UGaussianSplatComponent : public UPrimitiveComponent
 	GENERATED_BODY()
 public:
 
-	//  TODO: Need custom setter to make it BP-RW
+	//  TOD O: Need custom setter to make it BP-RW
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Gaussian Splats")
 	TObjectPtr<UGSplatAsset> GaussianSplatAsset = nullptr;
 
@@ -42,6 +42,7 @@ public:
 	//~ Begin UPrimitiveComponent Interface
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 	//~ End UPrimitiveComponent Interface
 
 private:
