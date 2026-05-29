@@ -38,8 +38,6 @@ public:
 	FGaussianSplatResource* GetResource_RenderThread() const;
 
 	bool SupportsRelighting() const;
-	virtual void DrawStaticElements(FStaticPrimitiveDrawInterface* PDI) override;
-
 
 	inline float GetScaleMultiplier() const { return ScaleMultiplier; }
 

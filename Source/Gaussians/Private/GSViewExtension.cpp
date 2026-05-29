@@ -15,6 +15,14 @@ DEFINE_STAT(STAT_SplatsRenderedLit)
 DEFINE_STAT(STAT_SplatsRenderedUnlit)
 
 
+static TAutoConsoleVariable<bool> CVarGaussiansDisableViewExtension(
+	TEXT("r.Gaussians.DisableViewExtension"),
+	false,
+	TEXT("Debug tool to disable primary view rendering via view extension."),
+	ECVF_RenderThreadSafe
+);
+
+
 FGSViewExtension::FGSViewExtension(const FAutoRegister& AutoRegister, UWorldSubsystem* Owner) : FSceneViewExtensionBase(AutoRegister), OwningSubsystem(Owner)
 {
 	GPUStats = MakePimpl<FGSGPUStats>();
@@ -94,7 +102,7 @@ void FGSViewExtension::PostRenderViewFamily_RenderThread(FRDGBuilder& GraphBuild
 bool FGSViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const
 {
 	//check if main viewport is valid and if the world of the context match the world of the owning subsystem
-	return Context.GetWorld() == OwningSubsystem->GetWorld();
+	return Context.GetWorld() == OwningSubsystem->GetWorld() && !CVarGaussiansDisableViewExtension.GetValueOnGameThread();
 }
 
 void FGSViewExtension::RegisterProxy(FGaussianSplatSceneProxy* Proxy)

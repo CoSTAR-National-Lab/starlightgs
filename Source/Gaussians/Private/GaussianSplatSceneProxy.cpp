@@ -134,15 +134,6 @@ FPrimitiveViewRelevance FGaussianSplatSceneProxy::GetViewRelevance(const FSceneV
 	return Result;
 }
 
-struct FGSOneFrameResource : public FOneFrameResource
-{
-public:
-	FGSOneFrameResource(ERHIFeatureLevel::Type InFeatureLevel) : VertexFactory(InFeatureLevel) {};
-	~FGSOneFrameResource() override { VertexFactory.ReleaseResource(); }
-
-	FGaussianSplatVertexFactory VertexFactory; 
-};
-
 void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 	const TArray<const FSceneView*>& Views,
 	const FSceneViewFamily& ViewFamily, 
@@ -155,8 +146,6 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 		{
 			FPrimitiveDrawInterface* PDI = Collector.GetPDI(ViewIndex);
 
-			//FBoxSphereBounds Bounds()
-
 			if (IsSelected())
 			{
 				RenderBounds(PDI, ViewFamily.EngineShowFlags, GetBounds(), true);
@@ -164,45 +153,38 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 
 			if (VertexFactory.IsInitialized())
 			{
-				auto& RHI = Collector.GetRHICommandList();
-				auto& batch = Collector.AllocateMesh();
+				FMeshBatch& Batch = Collector.AllocateMesh();
 
-				batch.Type = PT_TriangleList;
-				batch.bUseForDepthPass = true;
-				batch.CastShadow = true;
+				Batch.Type = PT_TriangleList;
+				Batch.bUseForDepthPass = true;
+				Batch.CastShadow = true;
 				 
-				batch.CastRayTracedShadow = false;
-				batch.bRenderToVirtualTexture = true;
-				batch.bUseAsOccluder = true;
-				batch.ReverseCulling = IsLocalToWorldDeterminantNegative();
-				batch.DepthPriorityGroup = GetDepthPriorityGroup(Views[ViewIndex]);
-				batch.bCanApplyViewModeOverrides = true;
-				batch.SegmentIndex = 0;
+				Batch.CastRayTracedShadow = false;
+				Batch.bRenderToVirtualTexture = true;
+				Batch.bUseAsOccluder = true;
+				Batch.ReverseCulling = IsLocalToWorldDeterminantNegative();
+				Batch.bDisableBackfaceCulling = true;
+				Batch.DepthPriorityGroup = GetDepthPriorityGroup(Views[ViewIndex]);
+				Batch.bCanApplyViewModeOverrides = true;
+				Batch.SegmentIndex = 0;
 
-				batch.MaterialRenderProxy = ShadowMaterialProxy;
-				//batch.PreparePrimitiveUniformBuffer(this, GMaxRHIFeatureLevel);
+				Batch.MaterialRenderProxy = ShadowMaterialProxy;
 
-				//auto& VertexFactoryPTR = Collector.AllocateOneFrameResource<FGSOneFrameResource>(Views[ViewIndex]->GetFeatureLevel());
-				 
-				//VertexFactoryPTR.VertexFactory.InitResource(RHI);
-				//VertexFactoryPTR.VertexFactory.SetGSplatDataUniformBuffer(GaussianSplatResource_RenderThread->GetResource()->GetUniformBuffer());
+				Batch.VertexFactory = &VertexFactory;
 
-				batch.VertexFactory = &VertexFactory;//&VertexFactoryPTR.VertexFactory;
-
-				FMeshBatchElement& MeshElement = batch.Elements[0];
-
+				FMeshBatchElement& MeshElement = Batch.Elements[0];
 				MeshElement.IndexBuffer = nullptr;
 				MeshElement.FirstIndex = 0;
-				MeshElement.NumPrimitives = 2 * 100;
+				// One quad per splat -> 2 triangles per quad
+				MeshElement.NumPrimitives = 2;// * GaussianSplatResource_RenderThread->GetResource()->GetSplatCount();
 				MeshElement.NumInstances = 1;
 				MeshElement.MinVertexIndex = 0;
 				MeshElement.MaxVertexIndex = 0;
 				
 				//MeshElement.PrimitiveUniformBuffer = GetUniformBuffer(); // we use primitive id stream and fetch primitive using GPUScene
 
-				Collector.AddMesh(ViewIndex, batch);
+				Collector.AddMesh(ViewIndex, Batch);
 			}
-
 
 			// Hit proxy building taken from NanoGS:
 			// https://github.com/TimChen1383/NanoGaussianSplatting/blob/main/Plugins/NanoGS/Source/NanoGS/Private/GaussianSplatSceneProxy.cpp
@@ -282,42 +264,4 @@ FGaussianSplatResource* FGaussianSplatSceneProxy::GetResource_RenderThread() con
 bool FGaussianSplatSceneProxy::SupportsRelighting() const
 {
 	return GaussianSplatResource_RenderThread->GetResource()->SupportsRelighting();
-}
-
-void FGaussianSplatSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
-{
-	//if (GaussianSplatResource_RenderThread)
-	//{
-		//PDI->ReserveMemoryForMeshes(1);
-
-		//FMeshBatch batch{};
-
-		//batch.Type = PT_TriangleStrip;
-		//batch.bUseForDepthPass = true;
-		//batch.CastShadow = true;
-		//batch.CastRayTracedShadow = false;
-		//batch.bUseAsOccluder = false;
-		//batch.ReverseCulling = false; // IsLocalToWorldDeterminantNegative();
-		//batch.DepthPriorityGroup = ESceneDepthPriorityGroup::SDPG_World;
-		//batch.bCanApplyViewModeOverrides = true;
-		//batch.SegmentIndex = 0;
-		//batch.MaterialRenderProxy = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy(); // the default one, otherwise should be the render proxy from the asset;
-
-
-		//batch.VertexFactory = &VertexFactory;
-
-		//FMeshBatchElement& MeshElement = batch.Elements[0];
-
-		//MeshElement.IndexBuffer = nullptr;
-		//MeshElement.FirstIndex = 0;
-		//MeshElement.NumPrimitives = 2;
-		//MeshElement.NumInstances = 1;
-		//MeshElement.MinVertexIndex = 0;
-		//MeshElement.MaxVertexIndex = 0;
-		//MeshElement.PrimitiveUniformBuffer = GetUniformBuffer();
-
-		//PDI->DrawMesh(batch, FLT_MAX);
-	//}
-
-	FPrimitiveSceneProxy::DrawStaticElements(PDI);
 }

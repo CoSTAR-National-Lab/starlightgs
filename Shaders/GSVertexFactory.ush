@@ -3,7 +3,6 @@
 #include "/Engine/Private/Quaternion.ush"
 #include "/Engine/Generated/GeneratedUniformBuffers.ush"
 
-
 #if VIRTUAL_SM_ENABLED
 #include "/Engine/Private/Nanite/NaniteDataDecode.ush"
 #include "/Engine/Private/SceneData.ush"
@@ -33,13 +32,12 @@ struct FVertexFactoryIntermediates
 {
     float4 LocalPos;
     float4 WorldPosition;
+	float2 VertexSvPosition; // For calculating distance from mean in pixel shader
   
-    float3 Normal;
-    float2 Size;
     float3 Conic;
-    float3 MeanCS;
+    float2 MeanScreenSpacePosition;
     float Opacity;
-    float Rotation; 
+    float3 Normal;
 
 	/** Cached primitive and instance data */
     FSceneDataIntermediates SceneData;
@@ -110,59 +108,40 @@ float3x3 VecToScaleMatrix(in float3 Scale)
 	);
 }
 
-//Compute Tangent
-
-void GetTangents(float Rotation, out float3 OutRight, out float3 OutUp)
-{
-    float3 ResolvedViewRight = ResolvedView.ViewRight;
-    float3 ResolvedViewUp = ResolvedView.ViewUp;
-
-	// The standard camera facing vectors
-    float3 CameraRight = ResolvedViewRight;
-    float3 CameraUp = -ResolvedViewUp;
-    float3 CameraFacingVector = -ResolvedView.ViewForward;
-
-    float3 Right = CameraRight.xyz;
-    float3 Up = CameraUp.xyz;
-
-	// Determine the angle of rotation.
-    float SinRotation;
-    float CosRotation;
-    sincos(Rotation, SinRotation, CosRotation);
-
-    float3 SR = Right * SinRotation;
-    float3 SU = Up * SinRotation;
-    float3 CR = Right * CosRotation;
-    float3 CU = Up * CosRotation;
-    OutRight = SU + CR;
-    OutUp = CU - SR;
-}
-
 /**
  * Projects splat into screen space based off of view provided
  */
 void ComputeSplatParameters(
+	// View properties
+	in float4x4 TranslatedWorldToView,
+    in float4x4 ViewToClip,
+    in float4x4 SVPositionToTranslatedWorld,
+    in float4 ViewSizeAndInvSize,
+    in float2 ProjectionSize,
+    in float2 TanHalfFOV,
+    
+	// Primitive properties
 	in FPrimitiveSceneData Primitive, 
 	in uint SplatIndex,
-    out float2 OutSize,
-    out float OutRotation, 
-    out float3 OutWorldNormal,
-    out float3 OutMeanWS, 
-    out float3 OutMeanCS, 
-    out float3 OutConic
+	in float2 LocalPosition,
+
+    out float4 OutWorldPosition,
+	out float2 OutSvPosition,
+    out float2 OutMeanScreenPosition,
+	out float3 OutConic,
+    out float3 OutWorldNormal
 )
 {
-    float3 LocalPosition = GSResources.Positions[SplatIndex];
-	float4 TranslatedWorldPosition = TransformLocalToTranslatedWorld(LocalPosition, Primitive.LocalToWorld);
+	float4 TranslatedWorldPosition = TransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld);
 
-    OutMeanWS = TranslatedWorldPosition.xyz;
+    // Fixes all the maths...
+	TranslatedWorldPosition.xyz *= 0.01f;
 
     //float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz);
     //float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(GSResources.Orientations[SplatIndex]));
 
-	float3 Scale = float3(0.025f, 0.01f, 0.01f);
-	FQuat Rotation = QuatFromAxisAngle(float3(0, 0, 1), 0.0f);
-
+	float3 Scale = float3(0.2f, 0.1f, 0.1f);
+	FQuat Rotation = QuatFromAxisAngle(float3(0, 0, 1), 0.73f);
 	float3x3 ScaleMatrix = VecToScaleMatrix(Scale * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz);
 	float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(Rotation));
 
@@ -170,36 +149,48 @@ void ComputeSplatParameters(
     float3x3 T = mul(RotationMatrix, ScaleMatrix);
     float3x3 Covariance3D = mul(T, transpose(T));
 
-    // Fixes all the maths...
-    TranslatedWorldPosition.xyz *= 0.01f;
+	float4 ViewPosition = mul(TranslatedWorldPosition, TranslatedWorldToView);
 
-    float4 ViewPosition = mul(TranslatedWorldPosition, ResolvedView.TranslatedWorldToView);
+    float4 ClipPosition = mul(ViewPosition, ViewToClip);
+	ClipPosition /= ClipPosition.w;
 
-    float4 ClipPosition = mul(ViewPosition, ResolvedView.ViewToClip);
-    ClipPosition /= ClipPosition.w;
+	float3x3 J; // Jacobian matrix
 
-	// Calculate Jacobian matrix based off of projection matrix
-	// Jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
-    float FocalZ = ResolvedView.ViewSizeAndInvSize.y / (2.0f * ResolvedView.TanAndInvTanHalfFOV.y);
+    if (ViewToClip[3][3] == 0.0f)
+    {
+	    // Calculate Jacobian matrix based off of projection matrix
+	    // Perspective jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
+		float FocalZ = ViewSizeAndInvSize.y / (2.0f * TanHalfFOV.y);
 
-    float LimX = 1.3f * ResolvedView.TanAndInvTanHalfFOV.x;
-    float LimY = 1.3f * ResolvedView.TanAndInvTanHalfFOV.y;
+		float LimX = 1.3f * TanHalfFOV.x;
+		float LimY = 1.3f * TanHalfFOV.y;
 
-    float TxTz = ViewPosition.x / ViewPosition.z;
-    float TyTz = ViewPosition.y / ViewPosition.z;
+		float TxTz = ViewPosition.x / ViewPosition.z;
+		float TyTz = ViewPosition.y / ViewPosition.z;
 
-	// Clamped versions of TxTz and TyTz 
-    float Tx = min(LimX, max(-LimX, TxTz)) * ViewPosition.z;
-    float TY = min(LimY, max(-LimY, TyTz)) * ViewPosition.z;
+	    // Clamped versions of TxTz and TyTz 
+		float Tx = min(LimX, max(-LimX, TxTz)) * ViewPosition.z;
+		float TY = min(LimY, max(-LimY, TyTz)) * ViewPosition.z;
 
-    float3x3 J = float3x3(
-		        FocalZ / ViewPosition.z, 0.0f, -(FocalZ * Tx) / (ViewPosition.z * ViewPosition.z),
-		        0.0f, FocalZ / ViewPosition.z, -(FocalZ * TY) / (ViewPosition.z * ViewPosition.z),
-				0.0f, 0.0f, 0.0f
-			);
+		J = float3x3(
+            FocalZ / ViewPosition.z, 0.0f, -(FocalZ * Tx) / (ViewPosition.z * ViewPosition.z),
+            0.0f, FocalZ / ViewPosition.z, -(FocalZ * TY) / (ViewPosition.z * ViewPosition.z),
+	    	0.0f, 0.0f, 0.0f
+	    );
+	}
+    else
+    {
+        // Calculate jacobian for orthographic projection
+		float X = ViewSizeAndInvSize.x / ProjectionSize.x;
+		float Y = ViewSizeAndInvSize.y / ProjectionSize.y;
+		J = float3x3(
+            X, 0.0f, 0.0f,
+            0.0f, Y, 0.0f,
+	    	0.0f, 0.0f, 0.0f
+	    );
+	}
 
-    //USING INVERSE OF VIEW HERE
-    float3x3 JW = mul(J, transpose((float3x3) ResolvedView.TranslatedWorldToView));
+	float3x3 JW = mul(J, transpose((float3x3) TranslatedWorldToView));
     float3x3 Covariance2D = mul(JW, mul(transpose(Covariance3D), transpose(JW)));
 
     float X = Covariance2D[0][0] + 0.3f;
@@ -219,32 +210,48 @@ void ComputeSplatParameters(
 
     if (Lambda2 > 0.0f)
     {
-        OutRotation = 360 * atan2(Lambda1 - X, Covariance) / (2 * PI);
+		float2 DiagonalVector = normalize(float2((Covariance - Y + Lambda1), (-X + Covariance + Lambda1)));
+		float2 MajorAxis = min(3 * sqrt(Lambda1), 1024.0f) * DiagonalVector;
+		float2 MinorAxis = min(3 * sqrt(Lambda2), 1024.0f) * float2(DiagonalVector.y, -DiagonalVector.x);
 
-        float2 Size = float2(Lambda1, Lambda2);
+		float2 MajorAxisMultiplier = MajorAxis / (ViewSizeAndInvSize.xy * 0.5f);
+		float2 MinorAxisMultiplier = MinorAxis / (ViewSizeAndInvSize.xy * 0.5f);
 
-        OutSize = Size * ViewPosition.z * max(ResolvedView.TanAndInvTanHalfFOV.x, ResolvedView.TanAndInvTanHalfFOV.y);
+		float4 VertexPositionClipSpace = float4(
+			ClipPosition.xy + (LocalPosition.x * MinorAxisMultiplier + LocalPosition.y * MajorAxisMultiplier),
+            ClipPosition.z,
+            1
+        );
+		// Transform to SvPosition
+		VertexPositionClipSpace.xy = (float2(VertexPositionClipSpace.x, -VertexPositionClipSpace.y) + 1) * 0.5f * ViewSizeAndInvSize.xy;
+		OutSvPosition = VertexPositionClipSpace.xy;
 
-        float3 LocalNormal = GSResources.Normals[SplatIndex];
-        OutWorldNormal = RotateLocalToWorld(LocalNormal, Primitive.LocalToWorld, Primitive.InvNonUniformScale);
+		// Transform this vertex back to world space
+		OutWorldPosition = mul(VertexPositionClipSpace, SVPositionToTranslatedWorld);
+		OutWorldPosition /= OutWorldPosition.w;
+		OutWorldPosition.xyz *= 100.0f;
 
-        OutMeanCS = ClipPosition.xyz;
+		// Convert from NDC to screen space
+		OutMeanScreenPosition = (float2(ClipPosition.x, -ClipPosition.y) + 1) * 0.5f * ViewSizeAndInvSize.xy;
+
         OutConic = Conic;
+		OutWorldNormal = RotateLocalToWorld(GSResources.Normals[SplatIndex], Primitive.LocalToWorld, Primitive.InvNonUniformScale);
     }
     else
     {
-        OutSize = float2(0, 0);
-        OutRotation = 0;
-        OutMeanCS = float3( 0, 0, 0);
-        OutMeanWS = float3( 0, 0, 0);
-        OutWorldNormal = float3(0, 0, 0);
-    }
+        // Set this to be an invalid primitive so it is culled (if every vertex is positioned at 0 then it will effectively be culled)
+		OutWorldPosition = 0.0f;
+		OutMeanScreenPosition = 0.0f;
+		OutConic = 0.0f;
+		OutWorldNormal = 0.0f;
+	}
 }
 
 /** Attributes to interpolate from the vertex shader to the pixel shader. */
 struct FVertexFactoryInterpolantsVSToPS
 {
-    float3 MeanCS : MEAN;
+	float2 VertexSvPosition : POSITION; // Used to calculate distance from mean in pixel shader - different from SV_Position in VSM rendering
+	float2 MeanScreenSpacePosition : MEAN;
     float3 Conic : CONIC;
     float  Opacity : OPACITY;
 
@@ -259,56 +266,59 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
     FVertexFactoryIntermediates Intermediates;
     Intermediates.SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
 
-	static float2 Quad[4] =
+	static float2 Quad[6] =
 	{
 		float2(-1, -1),
 		float2(-1, 1),
 		float2(1, -1),
-		float2(1, 1)
+		float2(1, -1),
+		float2(-1, 1),
+    	float2(1, 1)
 	};
 
-    uint SplatIndex = Input.VertexId / 4;
+    uint SplatIndex = Input.VertexId / 6;
 
-    Intermediates.LocalPos = float4(Quad[Input.VertexId % 4], 0, 1);
+    Intermediates.LocalPos = float4(Quad[Input.VertexId % 6], 0, 1);
 
 #if VIRTUAL_SM_ENABLED
 	uint PackedPageInfo = InstanceCulling_PageInfoBuffer[Intermediates.SceneData.InstanceIdLoadIndex];
 	FPageInfo PageInfo = UnpackPageInfo(PackedPageInfo);
 	FNaniteView NaniteView = UnpackNaniteView(ShadowDepthPass_PackedNaniteViews[PageInfo.ViewId]);
 
-    float4 Position = float4(GSResources.Positions[SplatIndex], 0);
-    Intermediates.WorldPosition = DFTransformLocalToTranslatedWorld(
-		Position.xyz + Intermediates.LocalPos.xyz,
-        Intermediates.SceneData.Primitive.LocalToWorld,
-        ResolvedView.PreViewTranslation
-    );
-#else
-    float2 SplatSize;
-    float  SplatRotation;
-    float3 SplatNormal;
-    float3 SplatMeanWS;
-    float3 SplatMeanCS;
-    float3 SplatConic;
-
-    ComputeSplatParameters(Intermediates.SceneData.Primitive, SplatIndex, SplatSize, SplatRotation, SplatNormal, SplatMeanWS, SplatMeanCS, SplatConic);
-
-    float3 Up = float3(1, 0, 0);
-    float3 Right = float3(0, 1, 0);
-	SplatSize = float2(1.0f, 1.0f);
-    //GetTangents(SplatRotation, Right, Up);
-
-	Intermediates.WorldPosition = float4(SplatMeanWS + Intermediates.LocalPos.xyz, 1);
-
-    Intermediates.Normal = SplatNormal;
-    Intermediates.Conic = SplatConic;
-    Intermediates.MeanCS = SplatMeanCS;
-	Intermediates.Opacity = GSResources.SHAndOpacities[SplatIndex].w;
+	// ProjectionSize is the size (in world units) of the orthographic view frustum
+	float2 ProjectionSize = float2(2.0f / NaniteView.ViewToClip[0][0], 2.0f / NaniteView.ViewToClip[1][1]);
 #endif
 
-	Intermediates.Normal = 0;
-	Intermediates.Conic = 0;
-	Intermediates.MeanCS = 0;
-	Intermediates.Opacity = 1;
+    ComputeSplatParameters(
+		// View parameters
+#if VIRTUAL_SM_ENABLED
+		NaniteView.TranslatedWorldToView,
+		NaniteView.ViewToClip,
+		NaniteView.SVPositionToTranslatedWorld,
+		NaniteView.ViewSizeAndInvSize,
+		ProjectionSize,
+		0.0f, // TODO: need to calculate from projection matrix if using punctual light
+#else
+        ResolvedView.TranslatedWorldToView,
+        ResolvedView.ViewToClip,
+        ResolvedView.SVPositionToTranslatedWorld,
+        ResolvedView.ViewSizeAndInvSize,
+        ResolvedView.ViewSizeAndInvSize.xy,
+        ResolvedView.TanAndInvTanHalfFOV.xy,
+#endif
+        // Primitive parameters
+		Intermediates.SceneData.Primitive,
+        SplatIndex,
+        Intermediates.LocalPos.xy,
+        // Outputs
+        Intermediates.WorldPosition,
+		Intermediates.VertexSvPosition,
+        Intermediates.MeanScreenSpacePosition,
+        Intermediates.Conic,
+        Intermediates.Normal
+	);
+
+	Intermediates.Opacity = GSResources.SHAndOpacities[SplatIndex].w;
 
     return Intermediates;
 }
@@ -335,7 +345,7 @@ FVertexFactoryInput LoadVertexFactoryInputForDynamicUpdate(uint TriangleIndex, i
 }
 uint GetNumRayTracingDynamicMeshVerticesIndirect()
 {
-	const uint NumVertices = 4;
+	const uint NumVertices = 6;
 	const uint NumInstances = 1; //GSResources.SplatCount;
 	return NumVertices * NumInstances;
 }
@@ -447,26 +457,6 @@ float3 VertexFactoryGetWorldNormal(FVertexFactoryInput Input, FVertexFactoryInte
 /** X for depth-only, PositionOnly Shaders  */
 float4 VertexFactoryGetWorldPosition(FPositionOnlyVertexFactoryInput Input)
 {
-    /*
-    FSceneDataIntermediates SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
-    FDFMatrix LocalToWorld = SceneData.Primitive.LocalToWorld;
-
-	static float2 Quad[4] =
-	{
-		float2(-1, -1),
-		float2(-1, 1),
-		float2(1, -1),
-		float2(1, 1)
-	};
-
-    uint splatIndex = Input.VertexId / 4;
-
-    float4 Position = float4(GSResources.Positions[splatIndex], 0);
-
-    float4 LocalPos = Position + float4(Quad[Input.VertexId % 4], 0, 1);
-
-    return TransformLocalToTranslatedWorld(LocalPos.xyz, LocalToWorld);
-	*/
 	return GetVertexFactoryIntermediates(Input).WorldPosition;
 }
 
@@ -476,8 +466,8 @@ float3 VertexFactoryGetWorldNormal(FPositionAndNormalOnlyVertexFactoryInput Inpu
     FDFMatrix LocalToWorld = SceneData.Primitive.LocalToWorld;
     float3 InvScale = SceneData.Primitive.InvNonUniformScale;
 
-    uint splatIndex = Input.VertexId / 4;
-    float3 Normal = GSResources.Normals[splatIndex];
+    uint SplatIndex = Input.VertexId / 6;
+	float3 Normal = GSResources.Normals[SplatIndex];
 
 #if USE_INSTANCING
 	const float3 InstanceTransformedNormal = mul(float4(Normal, 0), GetInstanceTransform(Input)).xyz;
@@ -532,8 +522,9 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(FVertexFacto
 	// Really only the last two components of the packed UVs have the opportunity to be uninitialized
     Interpolants = (FVertexFactoryInterpolantsVSToPS) 0;
 
-    Interpolants.Conic = Intermediates.Conic;
-    Interpolants.MeanCS = Intermediates.MeanCS;
+	Interpolants.Conic = float3(-0.5 * Intermediates.Conic.x, -Intermediates.Conic.y, -0.5 * Intermediates.Conic.z);
+	Interpolants.VertexSvPosition = Intermediates.VertexSvPosition;
+	Interpolants.MeanScreenSpacePosition = Intermediates.MeanScreenSpacePosition;
     Interpolants.Opacity = Intermediates.Opacity;
 
 #if NUM_TEX_COORD_INTERPOLATORS
@@ -552,7 +543,7 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(FVertexFacto
 }
 
 /** Converts from vertex factory specific interpolants to a FMaterialPixelParameters, which is used by material inputs. */
-FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVSToPS Interpolants, in out float4 SvPosition)
+FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVSToPS Interpolants, float4 SvPosition)
 {
 	// GetMaterialPixelParameters is responsible for fully initializing the result
     FMaterialPixelParameters Result = MakeInitializedMaterialPixelParameters();
@@ -565,19 +556,13 @@ FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVS
 	}
 #endif	//NUM_MATERIAL_TEXCOORDS
 
-    float2 DistanceFromMean = (Interpolants.MeanCS.xy - SvPosition.xy);
+	float2 DistanceFromMean = (Interpolants.MeanScreenSpacePosition.xy - Interpolants.VertexSvPosition.xy);
 
     float Power = dot(Interpolants.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
     float Alpha = exp(Power) * Interpolants.Opacity;
+	Result.VertexColor = float4(Alpha, 1, 1, 1);
     
-    //writeDepth;
-    //SvPosition.zw *= Alpha;
-
-    //Result.TwoSidedSign = 1;
     Result.PrimitiveId = GetPrimitiveId(Interpolants);
-
-    Result.VertexColor = float4(0.2, 1, 1, 1);
-
       
     return Result;
 }
