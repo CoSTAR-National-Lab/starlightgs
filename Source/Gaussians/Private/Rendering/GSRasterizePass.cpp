@@ -22,6 +22,13 @@ static TAutoConsoleVariable<int32> CVarGaussiansMaxSplats(
 	ECVF_RenderThreadSafe
 );
 
+static TAutoConsoleVariable<float> CVarGaussiansOpacityThreshold(
+	TEXT("r.Gaussians.OpacityThreshold"),
+	0.0f,
+	TEXT("Only render splats with an opacity greater than this threshold."),
+	ECVF_RenderThreadSafe
+);
+
 
 class FPermutationEnableRelighting : SHADER_PERMUTATION_BOOL("ENABLE_RELIGHTING");
 using FSplattingPermutationDomain = TShaderPermutationDomain<FPermutationEnableRelighting>;
@@ -39,6 +46,7 @@ class FGSPrepassCS : public FGlobalShader
 		SHADER_PARAMETER_STRUCT_REF(FPrimitiveUniformShaderParameters, Primitive)
 
 		SHADER_PARAMETER(float, SplatScaleMultiplier)
+		SHADER_PARAMETER(float, SplatOpacityThreshold)
 
 		SHADER_PARAMETER_STRUCT_INCLUDE(FGaussiansHZBParameters, HZB)
 
@@ -224,6 +232,7 @@ void FGSViewExtension::GaussianSplattingPass(
 		Parameters->Primitive = PrimitiveUniformBuffer;
 
 		Parameters->SplatScaleMultiplier = Proxy->GetScaleMultiplier();
+		Parameters->SplatOpacityThreshold = CVarGaussiansOpacityThreshold.GetValueOnRenderThread();
 
 		Parameters->HZB = Gaussians::GetHZBParameters(GraphBuilder, ViewInfo, Gaussians::EHZBType::FurthestHZB);
 

@@ -74,6 +74,7 @@ RWBuffer<uint> OutGaussianIDX;
 uint BufferCapacity;
 
 float SplatScaleMultiplier;
+float SplatOpacityThreshold;
 
 
 float3x3 VecToScaleMatrix(in float3 Scale)
@@ -131,7 +132,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_
 	GroupMemoryBarrierWithGroupSync();
 
 	//Terminate if we are outside the bounds of our input data
-	if (SplatIndex < GSResources.SplatCount)
+	if (SplatIndex < GSResources.SplatCount && GSResources.SHAndOpacities[SplatIndex].a > SplatOpacityThreshold)
     {
 	    float3 LocalPosition = GSResources.Positions[SplatIndex];
 	    float4 TranslatedWorldPosition = DFTransformLocalToTranslatedWorld(LocalPosition, MakeDFMatrix4x3(Primitive.PositionHigh, Primitive.LocalToRelativeWorld), PrimaryView.PreViewTranslation);
