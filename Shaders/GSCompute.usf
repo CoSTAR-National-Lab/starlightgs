@@ -397,8 +397,7 @@ struct FRTOut
     
 #if ENABLE_RELIGHTING
     float4 Normal : SV_TARGET1;
-    float4 MetallicRoughness : SV_TARGET2;
-    float DeviceZ : SV_TARGET3;
+	float4 DeviceZMetallicRoughness : SV_TARGET2;
 #else
     float4 Velocity : SV_TARGET1;
 	float DeviceZ : SV_Depth;
@@ -415,11 +414,11 @@ FRTOut GSSplatting_PS(FOutVertex Input)
     float Power = dot(Input.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
     float Alpha = exp(Power) * Input.Opacity;
 
-	Output.Color = float4(Input.Color * Alpha, Alpha);
+	Output.Color = float4(Input.Color, 1) * Alpha;
 
 #if ENABLE_RELIGHTING
-    Output.Normal = float4(Input.Normal * Alpha, Alpha);
-    Output.MetallicRoughness = float4(Input.MR * Alpha, 0, Alpha);
+    Output.Normal = float4(Input.Normal, 1) * Alpha;
+	Output.DeviceZMetallicRoughness = float4(Input.DeviceZ, Input.MR, 1) * Alpha;
 #else
 	// Must write out velocity for TAA/TSR for unlit splats, as they do not write depth information where velocity can be reconstructed from
 	float2 ClipPos = ((Input.Mean.xy * PrimaryView.ViewSizeAndInvSize.zw * 2.0f) - 1.0f) * float2(1.0f, -1.0f);
@@ -436,11 +435,10 @@ FRTOut GSSplatting_PS(FOutVertex Input)
 	float3 Velocity = float3(ClipPos - PrevClipPos.xy, Input.DeviceZ - PrevClipPos.z);
 
 	Output.Velocity = EncodeVelocityToTexture(Velocity);
-#endif
 
-    // For lit splats, will output to depth component of GSplatGBuffer
 	// For unlit splats, only used to test against scene depth and not written to depth buffer
 	Output.DeviceZ = Input.DeviceZ;
+#endif
 
     return Output;
 }

@@ -135,10 +135,9 @@ END_SHADER_PARAMETER_STRUCT()
 // Static blend / stencil states
 
 using FRelitBlendState = TStaticBlendState<
-	/* Color:  */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
-	/* Normal: */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
-	/* PBR:    */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
-	/* Depth:  */ CW_RED, BO_Max, BF_One, BF_One, BO_Add, BF_One, BF_One
+	/* Color:       */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
+	/* Normal:      */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
+	/* Depth + PBR: */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One
 >;
 using FUnlitBlendState = TStaticBlendState<
 	/* Color:    */ CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha,
