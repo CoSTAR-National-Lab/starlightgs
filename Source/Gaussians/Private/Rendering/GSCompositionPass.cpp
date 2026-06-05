@@ -6,8 +6,8 @@
 #include "Rendering/GSplatGBuffer.h"
 
 
-static TAutoConsoleVariable<float> CVarGaussiansAlphaThreshold(
-	TEXT("r.Gaussians.AlphaThreshold"),
+static TAutoConsoleVariable<float> CVarGaussiansAlphaCutoff(
+	TEXT("r.Gaussians.AlphaCutoff"),
 	0.3f,
 	TEXT("Threshold for compositing splats into the GBuffer. In range [0,1]."),
 	ECVF_RenderThreadSafe
@@ -69,7 +69,7 @@ void FGSViewExtension::GSCompositionPass(
 	// Bind splat buffer
 	PassParameters->GSplatGBuffer = GSplatGBuffer.GetShaderParameters(GraphBuilder);
 
-	PassParameters->AlphaThreshold = FMath::Clamp(CVarGaussiansAlphaThreshold.GetValueOnRenderThread(), 0.0f, 1.0f);
+	PassParameters->AlphaThreshold = FMath::Clamp(CVarGaussiansAlphaCutoff.GetValueOnRenderThread(), 0.0f, 1.0f);
 
 	// Get GBuffer
 	const FSceneTextures& SceneTexturesData = ViewInfo.GetSceneTextures();
