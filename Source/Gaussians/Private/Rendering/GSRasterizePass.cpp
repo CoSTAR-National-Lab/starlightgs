@@ -14,6 +14,8 @@
 
 #include "Rendering/GPURadixSort.h"
 
+#include "GaussiansDefinitions.h"
+
 
 static TAutoConsoleVariable<int32> CVarGaussiansMaxSplats(
 	TEXT("r.Gaussians.MaxSplats"),
@@ -49,6 +51,9 @@ class FGSPrepassCS : public FGlobalShader
 		SHADER_PARAMETER(float, SplatOpacityThreshold)
 
 		SHADER_PARAMETER_STRUCT_INCLUDE(FGaussiansHZBParameters, HZB)
+
+		SHADER_PARAMETER(int32, NumClippingVolumes)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGaussians_ClippingVolume>, ClippingVolumes)
 
 		// Out
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint32>, Counter)
@@ -148,11 +153,26 @@ using FRelitDepthStencilState = TStaticDepthStencilState<false, CF_Always>;
 using FUnlitDepthStencilState = TStaticDepthStencilState<false, CF_DepthNearOrEqual>;
 
 
+int32 ConvertClippingMode(EGaussianSplatClippingVolumeMode Mode)
+{
+	switch (Mode) {
+	case EGaussianSplatClippingVolumeMode::ClipAnyInside:  return GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ANY;
+	case EGaussianSplatClippingVolumeMode::ClipAllInside:  return GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ALL;
+	case EGaussianSplatClippingVolumeMode::ClipAnyOutside: return GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ANY;
+	case EGaussianSplatClippingVolumeMode::ClipAllOutside: return GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ALL;
+	default:
+		checkNoEntry(); break;
+	}
+	return -1;
+}
+
+
 void FGSViewExtension::GaussianSplattingPass(
 	FRDGBuilder& GraphBuilder, 
 	const FSceneView& InView,
 	const FRenderTargetBindingSlots& RenderTargets,
 	const TSet<FGaussianSplatSceneProxy*>& Proxies,
+	const TArray<FGSClippingVolumeParameters>& ClippingVolumes,
 	const FGSGPUStats* GPUStats)
 {
 	// Don't call this when there are no proxies
@@ -181,6 +201,35 @@ void FGSViewExtension::GaussianSplattingPass(
 	{
 		NormalBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), Capacity), TEXT("Gaussians.Normal"));
 		MetallicRoughnessBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity), TEXT("Gaussians.MetallicRoughness"));
+	}
+
+	// Build buffer of clipping volumes (if there are any in use)
+	const int32 NumClippingVolumes = ClippingVolumes.Num();
+	FRDGBufferRef ClippingVolumesBuffer = ClippingVolumes.IsEmpty()
+		? GSystemTextures.GetDefaultStructuredBuffer(GraphBuilder, sizeof(FGaussians_ClippingVolume))
+		: GraphBuilder.CreateBuffer(
+			FRDGBufferDesc::CreateStructuredDesc(sizeof(FGaussians_ClippingVolume), NumClippingVolumes),
+			TEXT("Gaussians.ClippingVolumes")
+	);
+
+	// Build clipping volume shader data
+	if (NumClippingVolumes > 0)
+	{
+		FGaussians_ClippingVolume* ClippingVolumeShaderData = GraphBuilder.AllocPODArray<FGaussians_ClippingVolume>(NumClippingVolumes);
+		const FVector& PreViewTranslation = ViewInfo.ViewMatrices.GetPreViewTranslation();
+
+		auto WritePtr = ClippingVolumeShaderData;
+		for (const auto& Volume : ClippingVolumes)
+		{
+			WritePtr->Min = static_cast<FVector3f>(Volume.Bounds.Min + PreViewTranslation);
+			WritePtr->Max = static_cast<FVector3f>(Volume.Bounds.Max + PreViewTranslation);
+			WritePtr->Mode = ConvertClippingMode(Volume.Mode);
+
+			WritePtr++;
+		}
+
+		// Safe to no copy since initial data was allocated via graph builder
+		GraphBuilder.QueueBufferUpload(ClippingVolumesBuffer, ClippingVolumeShaderData, NumClippingVolumes * sizeof(FGaussians_ClippingVolume), ERDGInitialDataFlags::NoCopy);
 	}
 
 	// Clear Indirect ARGS
@@ -234,6 +283,9 @@ void FGSViewExtension::GaussianSplattingPass(
 		Parameters->SplatOpacityThreshold = CVarGaussiansOpacityThreshold.GetValueOnRenderThread();
 
 		Parameters->HZB = Gaussians::GetHZBParameters(GraphBuilder, ViewInfo, Gaussians::EHZBType::FurthestHZB);
+
+		Parameters->NumClippingVolumes = NumClippingVolumes;
+		Parameters->ClippingVolumes = GraphBuilder.CreateSRV(ClippingVolumesBuffer);
 
 		Parameters->Counter = GraphBuilder.CreateUAV(IndirectArgsBuffer, PF_R32_UINT);
 

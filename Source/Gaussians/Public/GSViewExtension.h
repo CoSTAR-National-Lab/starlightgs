@@ -1,10 +1,9 @@
-
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "SceneViewExtension.h"
 
+#include "GaussianSplatClippingVolume.h"
 #include "Rendering/GSplatGBuffer.h"
 
 
@@ -17,7 +16,8 @@ DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Rendered: Lit"), STAT_SplatsRende
 DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Rendered: Unlit"), STAT_SplatsRenderedUnlit, STATGROUP_Gaussians, GAUSSIANS_API);
 
 
-class UWorldSubsystem;
+class UGSWorldSubsystem;
+
 class FGaussianSplatSceneProxy;
 class FGSGPUStats;
 
@@ -27,7 +27,7 @@ class FGSGPUStats;
 class GAUSSIANS_API FGSViewExtension : public FSceneViewExtensionBase
 {
 public:
-	FGSViewExtension(const FAutoRegister& AutoRegister, UWorldSubsystem* Owner);
+	FGSViewExtension(const FAutoRegister& AutoRegister, UGSWorldSubsystem* Owner);
 
 	virtual void SetupViewFamily(FSceneViewFamily& InViewFamily) override;
 	virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override;
@@ -50,6 +50,7 @@ private:
 		const FSceneView& InView, 
 		const FRenderTargetBindingSlots& RenderTargets, 
 		const TSet<FGaussianSplatSceneProxy*>& Proxies,
+		const TArray<FGSClippingVolumeParameters>& ClippingVolumes,
 		const FGSGPUStats* GPUStats
 	);
 
@@ -69,7 +70,9 @@ private:
 	TSet<FGaussianSplatSceneProxy*> RelightableProxies;
 	TSet<FGaussianSplatSceneProxy*> NonRelightableProxies;
 
-	UWorldSubsystem* OwningSubsystem = nullptr;
+	UGSWorldSubsystem* OwningSubsystem = nullptr;
+
+	TArray<FGSClippingVolumeParameters> ClippingVolumeParameters;
 
 	TPimplPtr<FGSGPUStats> GPUStats = nullptr;
 };

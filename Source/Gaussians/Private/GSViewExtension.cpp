@@ -7,7 +7,7 @@
 #include "PostProcess/PostProcessInputs.h"
 #include "ScenePrivate.h"
 
-#include "Subsystems/WorldSubsystem.h"
+#include "GSWorldSubsystem.h"
 
 DEFINE_STAT(STAT_SplatsSubmittedLit)
 DEFINE_STAT(STAT_SplatsSubmittedUnlit)
@@ -22,15 +22,35 @@ static TAutoConsoleVariable<bool> CVarGaussiansDisableViewExtension(
 	ECVF_RenderThreadSafe
 );
 
-
-FGSViewExtension::FGSViewExtension(const FAutoRegister& AutoRegister, UWorldSubsystem* Owner) : FSceneViewExtensionBase(AutoRegister), OwningSubsystem(Owner)
+FGSViewExtension::FGSViewExtension(const FAutoRegister& AutoRegister, UGSWorldSubsystem* Owner)
+	: FSceneViewExtensionBase(AutoRegister)
+	, OwningSubsystem(Owner)
 {
 	GPUStats = MakePimpl<FGSGPUStats>();
 }
 
 void FGSViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 {
+	// Build collection of clipping volumes and send to render thread
+	const TArray<const AGaussianSplatClippingVolume*>& ClippingVolumes = OwningSubsystem->GetClippingVolumes();
 
+	TArray<FGSClippingVolumeParameters> TempClippingVolumeParameters;
+	TempClippingVolumeParameters.Reserve(ClippingVolumes.Num());
+
+	for (const AGaussianSplatClippingVolume* Volume : ClippingVolumes)
+	{
+		if (!Volume->bEnabled)
+			continue;
+
+		TempClippingVolumeParameters.Emplace(Volume);
+	}
+
+	Algo::Sort(TempClippingVolumeParameters, [](const auto& VolA, const auto& VolB){ return VolA.Priority < VolB.Priority; });
+
+	ENQUEUE_RENDER_COMMAND(CopyGaussianSplatClippingVolumes)([this, TempVolumes = MoveTemp(TempClippingVolumeParameters)](FRHICommandList& RHICommandList)
+	{
+		ClippingVolumeParameters = TempVolumes;
+	});
 }
 
 void FGSViewExtension::SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView)
@@ -63,7 +83,7 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 			GSplatGBuffer.Clear(GraphBuilder);
 		}
 
-		GaussianSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(), RelightableProxies, GPUStats.Get());
+		GaussianSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(), RelightableProxies, ClippingVolumeParameters, GPUStats.Get());
 		GSCompositionPass(GraphBuilder, InView, GSplatGBuffer);
 	}
 }
@@ -90,7 +110,7 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 			SceneDepthTexture, ERenderTargetLoadAction::ELoad, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthRead_StencilNop
 		};
 
-		GaussianSplattingPass(GraphBuilder, InView, RenderTargets, NonRelightableProxies, GPUStats.Get());
+		GaussianSplattingPass(GraphBuilder, InView, RenderTargets, NonRelightableProxies, ClippingVolumeParameters, GPUStats.Get());
 	}
 }
 

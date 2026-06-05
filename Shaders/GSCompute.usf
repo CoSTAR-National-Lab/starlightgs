@@ -8,6 +8,8 @@
 // For frustum & occlusion culling
 #include "/Engine/Private/Nanite/NaniteHZBCull.ush"
 
+#include "Shared/GaussiansDefinitions.h"
+
 
 #ifndef ENABLE_RELIGHTING
 #define ENABLE_RELIGHTING true
@@ -75,6 +77,9 @@ uint BufferCapacity;
 
 float SplatScaleMultiplier;
 float SplatOpacityThreshold;
+
+uint NumClippingVolumes;
+StructuredBuffer<FGaussians_ClippingVolume> ClippingVolumes;
 
 
 float3x3 VecToScaleMatrix(in float3 Scale)
@@ -166,6 +171,8 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_
 		// Factor of 100 converts back to Unreal units
 		float3 WorldSpaceExtent = 300.0f * sqrt(MajorEigenvalue);
 
+		bool bVisible = true;
+
 		// Frustum cull individual splats
 		FFrustumCullData FrustumCullData = BoxCullFrustum(
 			TranslatedWorldPosition.xyz,
@@ -176,8 +183,44 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_
 			true,
 			false
 		);
+		bVisible &= FrustumCullData.bIsVisible;
 
-		if (FrustumCullData.bIsVisible)
+		// Cull against clipping volumes
+		if (bVisible)
+		{
+			float3 Min = TranslatedWorldPosition.xyz - WorldSpaceExtent;
+			float3 Max = TranslatedWorldPosition.xyz + WorldSpaceExtent;
+
+			for (uint i = 0; i < NumClippingVolumes; i++)
+			{
+				FGaussians_ClippingVolume ClippingVolume = ClippingVolumes[i];
+				switch (ClippingVolume.Mode)
+				{
+				case GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ALL:
+					bVisible &= !(all(Min > ClippingVolume.Min) && all(Max < ClippingVolume.Max));
+					break;
+				case GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ANY:
+					bVisible &= any(Max < ClippingVolume.Min) || any(Min > ClippingVolume.Max);
+					break;
+				case GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ALL:
+					bVisible &= !(any(Max < ClippingVolume.Min) || any(Min > ClippingVolume.Max));
+					break;
+				case GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ANY:
+					bVisible &= all(Min > ClippingVolume.Min) && all(Max < ClippingVolume.Max);
+					break;
+				default:
+					break;
+				}
+
+				if (!bVisible)
+				{
+					break;
+				}
+			}
+
+		}
+
+		if (bVisible)
 		{
 			// Fixes all the maths...
 			TranslatedWorldPosition.xyz *= 0.01f;
@@ -237,7 +280,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_
 				float2 Max = ClipPosition.xy + (abs(MinorAxisMultiplier) + abs(MajorAxisMultiplier));
 				float2 Min = ClipPosition.xy - (abs(MinorAxisMultiplier) + abs(MajorAxisMultiplier));
 
-				bool bVisible = all(and(Min < 1.0f, Max.x > -1.0f));
+				bVisible = all(and(Min < 1.0f, Max.x > -1.0f));
 
 				// Cull against HZB
 				if (bVisible)
