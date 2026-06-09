@@ -24,15 +24,7 @@ FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(UGaussianSplatComponent* InCo
 		GaussianSplatResource_RenderThread = InComponent->GaussianSplatAsset->GetOrCreateResource();
 	}
 
-	if(InComponent->SplatMaterial)
-	{
-		ShadowMaterialProxy = InComponent->SplatMaterial->GetRenderProxy();
-	}
-	else
-	{
-		ShadowMaterialProxy = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy();
-		
-	}
+	ShadowMaterialProxy = InComponent->SplatMaterial ? InComponent->SplatMaterial->GetRenderProxy() : nullptr;
 
 	// Get view extension from world subsystem
 	if (UWorld* World = InComponent->GetWorld())
@@ -58,10 +50,9 @@ void FGaussianSplatSceneProxy::CreateRenderThreadResources(FRHICommandListBase& 
 	check(IsInRenderingThread());
 	FPrimitiveSceneProxy::CreateRenderThreadResources(RHICmdList);
 
-	VertexFactory.InitResource(RHICmdList);
-
 	if (GaussianSplatResource_RenderThread)
 	{
+		VertexFactory.InitResource(RHICmdList);
 		VertexFactory.SetGSplatDataUniformBuffer(GaussianSplatResource_RenderThread->GetResource()->GetUniformBuffer());
 
 		if (auto ViewExt = ViewExtension.Pin())
@@ -151,7 +142,7 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 				RenderBounds(PDI, ViewFamily.EngineShowFlags, GetBounds(), true);
 			}
 
-			if (VertexFactory.IsInitialized())
+			if (VertexFactory.IsInitialized() && ShadowMaterialProxy)
 			{
 				FMeshBatch& Batch = Collector.AllocateMesh();
 
