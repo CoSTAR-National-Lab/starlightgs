@@ -176,7 +176,7 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 				MeshElement.IndexBuffer = nullptr;
 				MeshElement.FirstIndex = 0;
 				// One quad per splat -> 2 triangles per quad
-				MeshElement.NumPrimitives = 2;// * GaussianSplatResource_RenderThread->GetResource()->GetSplatCount();
+				MeshElement.NumPrimitives = 2 * GaussianSplatResource_RenderThread->GetResource()->GetSplatCount();
 				MeshElement.NumInstances = 1;
 				MeshElement.MinVertexIndex = 0;
 				MeshElement.MaxVertexIndex = 0;
