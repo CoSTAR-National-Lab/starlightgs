@@ -47,5 +47,6 @@ FGSClippingVolumeParameters::FGSClippingVolumeParameters(const AGaussianSplatCli
 	: Mode(ClippingVolume->Mode)
 	, Priority(ClippingVolume->Priority)
 	, Bounds(ClippingVolume->GetBounds().GetBox())
+	, Mask(ClippingVolume->Mask)
 {
 }

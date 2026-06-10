@@ -54,6 +54,7 @@ class FGSPrepassCS : public FGlobalShader
 
 		SHADER_PARAMETER(int32, NumClippingVolumes)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGaussians_ClippingVolume>, ClippingVolumes)
+		SHADER_PARAMETER(uint32, ClippingVolumeMask)
 
 		// Out
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint32>, Counter)
@@ -224,6 +225,7 @@ void FGSViewExtension::GaussianSplattingPass(
 			WritePtr->Min = static_cast<FVector3f>(Volume.Bounds.Min + PreViewTranslation);
 			WritePtr->Max = static_cast<FVector3f>(Volume.Bounds.Max + PreViewTranslation);
 			WritePtr->Mode = ConvertClippingMode(Volume.Mode);
+			WritePtr->Mask = Volume.Mask;
 
 			WritePtr++;
 		}
@@ -286,6 +288,7 @@ void FGSViewExtension::GaussianSplattingPass(
 
 		Parameters->NumClippingVolumes = NumClippingVolumes;
 		Parameters->ClippingVolumes = GraphBuilder.CreateSRV(ClippingVolumesBuffer);
+		Parameters->ClippingVolumeMask = static_cast<uint32>(Proxy->GetClippingVolumeMask());
 
 		Parameters->Counter = GraphBuilder.CreateUAV(IndirectArgsBuffer, PF_R32_UINT);
 

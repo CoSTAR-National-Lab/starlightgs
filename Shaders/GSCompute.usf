@@ -80,6 +80,7 @@ float SplatOpacityThreshold;
 
 uint NumClippingVolumes;
 StructuredBuffer<FGaussians_ClippingVolume> ClippingVolumes;
+uint ClippingVolumeMask;
 
 
 float3x3 VecToScaleMatrix(in float3 Scale)
@@ -194,6 +195,11 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_
 			for (uint i = 0; i < NumClippingVolumes; i++)
 			{
 				FGaussians_ClippingVolume ClippingVolume = ClippingVolumes[i];
+				if ((ClippingVolumeMask & ClippingVolume.Mask) == 0)
+				{
+					continue;
+				}
+
 				switch (ClippingVolume.Mode)
 				{
 				case GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ALL:

@@ -32,6 +32,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Gaussian Splat Clipping Volume")
 	int32 Priority = 0;
 
+	UPROPERTY(EditAnywhere, Category = "Gaussian Splat Clipping Volume")
+	int32 Mask = 0;
+
 public:
 	AGaussianSplatClippingVolume();
 
@@ -48,6 +51,8 @@ struct GAUSSIANS_API FGSClippingVolumeParameters
 	int32 Priority;
 
 	FBox Bounds;
+
+	int32 Mask;
 
 	explicit FGSClippingVolumeParameters(const AGaussianSplatClippingVolume* ClippingVolume);
 };

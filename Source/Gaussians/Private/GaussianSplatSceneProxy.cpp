@@ -15,7 +15,9 @@
 
 FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(UGaussianSplatComponent* InComponent)
 	: FPrimitiveSceneProxy(InComponent)
-	, ScaleMultiplier(InComponent->SplatScaleMultiplier), VertexFactory(GMaxRHIFeatureLevel)
+	, VertexFactory(GMaxRHIFeatureLevel)
+	, ScaleMultiplier(InComponent->SplatScaleMultiplier)
+	, ClippingVolumeMask(InComponent->ClippingVolumeMask)
 {
 	if (InComponent->GaussianSplatAsset)
 	{

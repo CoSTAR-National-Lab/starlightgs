@@ -11,8 +11,9 @@ namespace UE::HLSL
 struct FGaussians_ClippingVolume
 {
 	float3 Min;
-	float3 Max;
 	uint Mode;
+	float3 Max;
+	uint Mask;
 };
 
 #define GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ALL  0

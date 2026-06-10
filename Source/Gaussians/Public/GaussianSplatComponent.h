@@ -25,6 +25,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats")
 	UMaterial* SplatMaterial;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats")
+	int32 ClippingVolumeMask = 0;
+
 
 public:
 

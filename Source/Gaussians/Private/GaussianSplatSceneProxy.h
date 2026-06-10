@@ -40,6 +40,7 @@ public:
 	bool SupportsRelighting() const;
 
 	inline float GetScaleMultiplier() const { return ScaleMultiplier; }
+	inline int32 GetClippingVolumeMask() const { return ClippingVolumeMask; }
 
 private:
 	// GPU Resources for the asset pointed to by the component
@@ -55,6 +56,7 @@ private:
 
 	// Per-instance properties
 	float ScaleMultiplier = 1.0f;
+	int32 ClippingVolumeMask = 0;
 
 	//Proxy vertex factory
 	FGaussianSplatVertexFactory VertexFactory;
