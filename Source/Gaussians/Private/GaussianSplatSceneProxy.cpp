@@ -49,6 +49,8 @@ FGaussianSplatSceneProxy::~FGaussianSplatSceneProxy()
 
 void FGaussianSplatSceneProxy::CreateRenderThreadResources(FRHICommandListBase& RHICmdList)
 {
+	UE_LOG(LogTemp, Display, TEXT("Creating render thread resources..."));
+
 	check(IsInRenderingThread());
 	FPrimitiveSceneProxy::CreateRenderThreadResources(RHICmdList);
 
@@ -251,10 +253,12 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 
 FGaussianSplatResource* FGaussianSplatSceneProxy::GetResource_RenderThread() const
 {
+	check(IsInRenderingThread());
 	return GaussianSplatResource_RenderThread->GetResource();
 }
 
 bool FGaussianSplatSceneProxy::SupportsRelighting() const
 {
+	check(IsInRenderingThread());
 	return GaussianSplatResource_RenderThread->GetResource()->SupportsRelighting();
 }

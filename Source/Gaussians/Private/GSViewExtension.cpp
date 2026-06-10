@@ -127,6 +127,7 @@ bool FGSViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionConte
 
 void FGSViewExtension::RegisterProxy(FGaussianSplatSceneProxy* Proxy)
 {
+	check(IsInRenderingThread());
 	if (Proxy->SupportsRelighting())
 	{
 		check(!RelightableProxies.Contains(Proxy));
@@ -141,6 +142,7 @@ void FGSViewExtension::RegisterProxy(FGaussianSplatSceneProxy* Proxy)
 
 void FGSViewExtension::UnregisterProxy(FGaussianSplatSceneProxy* Proxy)
 {
+	check(IsInRenderingThread());
 	if (Proxy->SupportsRelighting())
 	{
 		check(RelightableProxies.Contains(Proxy));
