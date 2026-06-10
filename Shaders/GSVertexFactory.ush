@@ -121,6 +121,8 @@ void ComputeSplatParameters(
     in float2 TanHalfFOV,
 	in float4x4 ViewToTranslatedWorld, //camera matrix
 	in FDFVector3 PreViewTranslation,
+	in float4x4 TranslatedWorldToClip,
+
 	// Primitive properties
 	in FPrimitiveSceneData Primitive, 
 	in uint SplatIndex,
@@ -220,6 +222,8 @@ void ComputeSplatParameters(
 
         float3x3 CamM = (float3x3) ViewToTranslatedWorld;
 
+
+
         //View Space is Local Space
         worldOffset.xyz = mul(worldOffset.xyz,CamM);
 
@@ -229,13 +233,17 @@ void ComputeSplatParameters(
 //#if UE_DF_NO_FAST_MATH
 //	float3 TranslatedWorldPositionOrigin = DFAddDemote(DFGetOrigin(LocalToWorld), PreViewTranslation);
 //#else
-       float3 TranslatedWorldPositionOrigin = DFFastLocalSubtractDemote(Primitive.LocalToWorld.PostTranslation, DFNegate(ResolvedView.PreViewTranslation)) + Primitive.LocalToWorld.M[3].xyz;
+//      float3 TranslatedWorldPositionOrigin = DFFastLocalSubtractDemote(Primitive.LocalToWorld.PostTranslation, DFNegate(ResolvedView.PreViewTranslation)) + Primitive.LocalToWorld.M[3].xyz;
 //#endif
 	
+        //OutSvPosition = float2(0, 0);
+        //OutMeanScreenPosition = float2(0, 0);
         OutWorldPosition = TranslatedWorldPosition * 100.f +float4(worldOffset.xyz, 1);
 
 
         //OutWorldPosition = worldOffset;
+        OutMeanScreenPosition = mul(TranslatedWorldPosition, TranslatedWorldToClip);
+        OutSvPosition = mul(OutWorldPosition, TranslatedWorldToClip);
         OutConic = Conic;
         OutWorldNormal = RotateLocalToWorld(GSResources.Normals[SplatIndex], Primitive.LocalToWorld, Primitive.InvNonUniformScale);
 
@@ -395,6 +403,7 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 		0.0f, // TODO: need to calculate from projection matrix if using punctual light
 		NaniteView.ViewToTranslatedWorld,
 		NaniteView.PreViewTranslation,
+		NaniteView.TranslatedWorldToClip,
 #else
         ResolvedView.TranslatedWorldToView,
         ResolvedView.ViewToClip,
@@ -404,6 +413,7 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
         ResolvedView.TanAndInvTanHalfFOV.xy,
 		ResolvedView.ViewToTranslatedWorld,
 		ResolvedView.PreViewTranslation,
+		ResolvedView.TranslatedWorldToClip,
 #endif
         // Primitive parameters
 		Intermediates.SceneData.Primitive,
