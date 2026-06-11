@@ -75,7 +75,7 @@ void GSplatCompositionPS(
 	GBufferData.SpecularColor = 0.0f;
 	GBufferData.BaseColor = BaseColor.rgb;
 	GBufferData.Metallic = Metallic;
-	GBufferData.Specular = 1.0f;
+	GBufferData.Specular = 0.5f;
 	GBufferData.Roughness = Roughness;
 	GBufferData.ShadingModelID = SHADINGMODELID_DEFAULT_LIT;
 	GBufferData.Velocity = 0.0f;
