@@ -218,7 +218,7 @@ void ComputeSplatParameters(
 
         //worldOffset.xyz = CameraRight * LocalPosition.x + CameraUp * LocalPosition.y * 2;
 		//to UU
-        worldOffset *= 50.f;
+        worldOffset *= 100.f;
 
         float3x3 CamM = (float3x3) ViewToTranslatedWorld;
 
@@ -230,20 +230,26 @@ void ComputeSplatParameters(
         //worldOffset = DFTransformLocalToTranslatedWorld(worldOffset.xyz, Primitive.LocalToWorld, ResolvedView.PreViewTranslation);
 
         //Apply just the PreViewTranslation but leave the view rotation intact.
-//#if UE_DF_NO_FAST_MATH
-//	float3 TranslatedWorldPositionOrigin = DFAddDemote(DFGetOrigin(LocalToWorld), PreViewTranslation);
-//#else
-//      float3 TranslatedWorldPositionOrigin = DFFastLocalSubtractDemote(Primitive.LocalToWorld.PostTranslation, DFNegate(ResolvedView.PreViewTranslation)) + Primitive.LocalToWorld.M[3].xyz;
-//#endif
+        //#if UE_DF_NO_FAST_MATH
+        //	float3 TranslatedWorldPositionOrigin = DFAddDemote(DFGetOrigin(LocalToWorld), PreViewTranslation);
+        //#else
+        //  float3 TranslatedWorldPositionOrigin = DFFastLocalSubtractDemote(Primitive.LocalToWorld.PostTranslation, DFNegate(ResolvedView.PreViewTranslation)) + Primitive.LocalToWorld.M[3].xyz;
+        //#endif
 	
         //OutSvPosition = float2(0, 0);
         //OutMeanScreenPosition = float2(0, 0);
         OutWorldPosition = TranslatedWorldPosition * 100.f +float4(worldOffset.xyz, 1);
 
-
+        
         //OutWorldPosition = worldOffset;
-        OutMeanScreenPosition = mul(TranslatedWorldPosition, TranslatedWorldToClip);
-        OutSvPosition = mul(OutWorldPosition, TranslatedWorldToClip);
+
+        float4 MeanSP = mul(TranslatedWorldPosition * 100.f, TranslatedWorldToClip);
+        MeanSP.xyz /= MeanSP.w;
+        OutMeanScreenPosition.xy = (float2(MeanSP.x, -MeanSP.y) + 1) * 0.5f * float2(2.f/ViewToClip[0][0], 2.f/ViewToClip[1][1]); // ViewSize Ortho matrix X and Y are 2/Width and 2/Height respectively
+
+        float4 VertSP = mul(OutWorldPosition, TranslatedWorldToClip);
+        VertSP.xyz /= VertSP.w;
+        OutSvPosition.xy = (float2(VertSP.x, -VertSP.y) + 1) * 0.5* float2(2.f / ViewToClip[0][0], 2.f / ViewToClip[1][1]);
         OutConic = Conic;
         OutWorldNormal = RotateLocalToWorld(GSResources.Normals[SplatIndex], Primitive.LocalToWorld, Primitive.InvNonUniformScale);
 
@@ -398,7 +404,7 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 		NaniteView.TranslatedWorldToView,
 		NaniteView.ViewToClip,
 		NaniteView.SVPositionToTranslatedWorld,
-		NaniteView.ViewSizeAndInvSize,
+		NaniteView.ViewSizeAndInvSize ,
 		ProjectionSize,
 		0.0f, // TODO: need to calculate from projection matrix if using punctual light
 		NaniteView.ViewToTranslatedWorld,
