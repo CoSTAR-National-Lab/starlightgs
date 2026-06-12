@@ -1,7 +1,5 @@
 #include "GaussianSplatSceneProxy.h"
 
-#include <devicetopology.h>
-
 #include "DynamicMeshBuilder.h"
 #include "GaussianSplatComponent.h"
 #include "GaussianSplatResource.h"
@@ -12,12 +10,11 @@
 #include "Engine/InstancedStaticMesh.h"
 
 
-
 FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(UGaussianSplatComponent* InComponent)
 	: FPrimitiveSceneProxy(InComponent)
-	, VertexFactory(GMaxRHIFeatureLevel)
 	, ScaleMultiplier(InComponent->SplatScaleMultiplier)
 	, ClippingVolumeMask(InComponent->ClippingVolumeMask)
+	, VertexFactory(GMaxRHIFeatureLevel)
 {
 	if (InComponent->GaussianSplatAsset)
 	{
