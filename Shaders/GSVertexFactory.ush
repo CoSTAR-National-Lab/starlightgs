@@ -223,7 +223,6 @@ void ComputeSplatParameters(
         float3x3 CamM = (float3x3) ViewToTranslatedWorld;
 
 
-
         //View Space is Local Space
         worldOffset.xyz = mul(worldOffset.xyz,CamM);
 
@@ -240,20 +239,24 @@ void ComputeSplatParameters(
         //OutMeanScreenPosition = float2(0, 0);
         OutWorldPosition = TranslatedWorldPosition * 100.f +float4(worldOffset.xyz, 1);
 
-        
+        float4 TWP = DFTransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld, PreViewTranslation);
+
+        TWP.w *= 100.f; //essentailly scales the whole thing down by a 100;
+
         //OutWorldPosition = worldOffset;
 
-        float4 MeanSP = mul(TranslatedWorldPosition * 100.f, TranslatedWorldToClip);
+        float4 MeanSP = mul(TWP, TranslatedWorldToClip);
         MeanSP.xyz /= MeanSP.w;
         OutMeanScreenPosition.xy = (float2(MeanSP.x, -MeanSP.y) + 1) * 0.5f * float2(2.f/ViewToClip[0][0], 2.f/ViewToClip[1][1]); // ViewSize Ortho matrix X and Y are 2/Width and 2/Height respectively
 
-        float4 VertSP = mul(OutWorldPosition, TranslatedWorldToClip);
+        float4 VertSP = mul(TWP + float4(worldOffset.xyz,1), TranslatedWorldToClip);
         VertSP.xyz /= VertSP.w;
         OutSvPosition.xy = (float2(VertSP.x, -VertSP.y) + 1) * 0.5* float2(2.f / ViewToClip[0][0], 2.f / ViewToClip[1][1]);
+
         OutConic = Conic;
         OutWorldNormal = RotateLocalToWorld(GSResources.Normals[SplatIndex], Primitive.LocalToWorld, Primitive.InvNonUniformScale);
 
-        return;
+        return; 
     }
 
 	float3x3 J; // Jacobian matrix
@@ -357,7 +360,7 @@ struct FVertexFactoryInterpolantsVSToPS
 {
 	float2 VertexSvPosition : POSITION; // Used to calculate distance from mean in pixel shader - different from SV_Position in VSM rendering
 	float2 MeanScreenSpacePosition : MEAN;
-    float3 Conic : CONIC;
+    nointerpolation float3 Conic : CONIC;
     float  Opacity : OPACITY;
 
 #if NUM_TEX_COORD_INTERPOLATORS
@@ -640,6 +643,7 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(FVertexFacto
     Interpolants = (FVertexFactoryInterpolantsVSToPS) 0;
 
 	Interpolants.Conic = float3(-0.5 * Intermediates.Conic.x, -Intermediates.Conic.y, -0.5 * Intermediates.Conic.z);
+	//Interpolants.Conic = float3(Intermediates.Conic.x, Intermediates.Conic.y, Intermediates.Conic.z);
 	Interpolants.VertexSvPosition = Intermediates.VertexSvPosition;
 	Interpolants.MeanScreenSpacePosition = Intermediates.MeanScreenSpacePosition;
     Interpolants.Opacity = Intermediates.Opacity;
@@ -678,6 +682,7 @@ FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVS
     float Power = dot(Interpolants.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
     float Alpha = exp(Power) * Interpolants.Opacity;
 	Result.VertexColor = float4(Alpha, 1, 1, 1);
+	//Result.VertexColor = float4(Interpolants.Conic.xyz, 0);
     
     Result.PrimitiveId = GetPrimitiveId(Interpolants);
       
