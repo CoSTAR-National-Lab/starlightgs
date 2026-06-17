@@ -8,6 +8,13 @@ void UGaussianSplatComponent::PostEditChangeProperty(struct FPropertyChangedEven
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
+	// Stops from crashing when adding splat as component in blueprint
+	// TODO: Splat doesn't render in blueprint viewport though
+	if (HasAnyFlags(RF_ClassDefaultObject) || !IsValid(this))
+	{
+		return;
+	}
+
 	FName PropertyName = PropertyChangedEvent.GetPropertyName();
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(UGaussianSplatComponent, GaussianSplatAsset))
 	{

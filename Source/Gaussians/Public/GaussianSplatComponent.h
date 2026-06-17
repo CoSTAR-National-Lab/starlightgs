@@ -8,7 +8,7 @@
 #include "GaussianSplatComponent.generated.h"
 
 
-UCLASS(Blueprintable, ClassGroup = (Rendering), hidecategories = (Collision, Physics, Navigation))
+UCLASS(Blueprintable, ClassGroup = (Rendering), hidecategories = (Collision, Physics, Navigation), meta=(BlueprintSpawnableComponent))
 class GAUSSIANS_API UGaussianSplatComponent : public UPrimitiveComponent
 {
 	GENERATED_BODY()
@@ -27,6 +27,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats")
 	int32 ClippingVolumeMask = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats", AdvancedDisplay)
+	bool bForceDrawVertexFactoryInMainPass = false;
 
 
 public:

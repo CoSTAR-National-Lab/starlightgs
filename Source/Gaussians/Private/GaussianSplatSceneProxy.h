@@ -20,10 +20,6 @@ public:
 	virtual void CreateRenderThreadResources(FRHICommandListBase& RHICmdList) override;
 	virtual void DestroyRenderThreadResources() override;
 
-#if WITH_EDITOR
-	virtual HHitProxy* CreateHitProxies(UPrimitiveComponent* Component, TArray<TRefCountPtr<HHitProxy>>& OutHitProxies) override;
-#endif
-
 	virtual SIZE_T GetTypeHash() const override;
 	virtual uint32 GetMemoryFootprint() const override;
 
@@ -49,14 +45,10 @@ private:
 
 	TWeakPtr<FGSViewExtension> ViewExtension;
 
-#if WITH_EDITOR
-	// Cached hit proxy created in CreateHitProxies, used for editor viewport click selection.
-	HHitProxy* SelectionHitProxy = nullptr;
-#endif
-
 	// Per-instance properties
 	float ScaleMultiplier = 1.0f;
 	int32 ClippingVolumeMask = 0;
+	bool bDrawVFInMainPass = false;
 
 	//Proxy vertex factory
 	FGaussianSplatVertexFactory VertexFactory;

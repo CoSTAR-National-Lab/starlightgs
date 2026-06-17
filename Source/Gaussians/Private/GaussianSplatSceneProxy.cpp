@@ -1,13 +1,11 @@
 #include "GaussianSplatSceneProxy.h"
 
-#include "DynamicMeshBuilder.h"
 #include "GaussianSplatComponent.h"
 #include "GaussianSplatResource.h"
 #include "GaussianSplatVertexFactory.h"
 
 #include "GSWorldSubsystem.h"
 #include "GSViewExtension.h"
-#include "Engine/InstancedStaticMesh.h"
 
 
 FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(UGaussianSplatComponent* InComponent)
@@ -36,7 +34,6 @@ FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(UGaussianSplatComponent* InCo
 
 	bSupportsRuntimeVirtualTexture = true;
 	bIsStaticMesh = false;
-	//check(bCastDynamicShadow)
 }
 
 FGaussianSplatSceneProxy::~FGaussianSplatSceneProxy()
@@ -46,8 +43,6 @@ FGaussianSplatSceneProxy::~FGaussianSplatSceneProxy()
 
 void FGaussianSplatSceneProxy::CreateRenderThreadResources(FRHICommandListBase& RHICmdList)
 {
-	UE_LOG(LogTemp, Display, TEXT("Creating render thread resources..."));
-
 	check(IsInRenderingThread());
 	FPrimitiveSceneProxy::CreateRenderThreadResources(RHICmdList);
 
@@ -79,19 +74,7 @@ void FGaussianSplatSceneProxy::DestroyRenderThreadResources()
 
 		GaussianSplatResource_RenderThread.Reset();
 	}
-
-	
 }
-
-#if WITH_EDITOR
-HHitProxy* FGaussianSplatSceneProxy::CreateHitProxies(UPrimitiveComponent* Component,
-	TArray<TRefCountPtr<HHitProxy>>& OutHitProxies)
-{
-	HHitProxy* DefaultProxy = FPrimitiveSceneProxy::CreateHitProxies(Component, OutHitProxies);
-	SelectionHitProxy = DefaultProxy;
-	return DefaultProxy;
-}
-#endif
 
 SIZE_T FGaussianSplatSceneProxy::GetTypeHash() const
 {
@@ -106,20 +89,14 @@ uint32 FGaussianSplatSceneProxy::GetMemoryFootprint() const
 
 FPrimitiveViewRelevance FGaussianSplatSceneProxy::GetViewRelevance(const FSceneView* View) const
 {
-
-	//To draw shadow only draw relevance must be off
-	// shadow relevance must be IsShadowCast.
-
 	FPrimitiveViewRelevance Result;
-
-	Result.bDrawRelevance = IsShown(View); // View->Family->EngineShowFlags.HitProxies; //IsShown(View); //false;// ; // to draw only shadows
-	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
-	Result.bRenderInMainPass = ShouldRenderInMainPass();
-	Result.bRenderInDepthPass = ShouldRenderInDepthPass();
-	Result.bUsesLightingChannels = GetLightingChannelMask() != GetDefaultLightingChannelMask();
-	Result.bTranslucentSelfShadow = bCastVolumetricTranslucentShadow; 
+	Result.bDrawRelevance = IsShown(View);
+	Result.bRenderCustomDepth = false;
+	Result.bRenderInMainPass = View->Family->EngineShowFlags.HitProxies || bDrawVFInMainPass;
+	Result.bRenderInDepthPass = false;
 
 	Result.bShadowRelevance = IsShadowCast(View);
+	Result.bTranslucentSelfShadow = bCastVolumetricTranslucentShadow;
 	
 	Result.bDynamicRelevance = true;
 
@@ -172,78 +149,9 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 				MeshElement.NumInstances = 1;
 				MeshElement.MinVertexIndex = 0;
 				MeshElement.MaxVertexIndex = 0;
-				
-				//MeshElement.PrimitiveUniformBuffer = GetUniformBuffer(); // we use primitive id stream and fetch primitive using GPUScene
 
 				Collector.AddMesh(ViewIndex, Batch);
 			}
-
-			// Hit proxy building taken from NanoGS:
-			// https://github.com/TimChen1383/NanoGaussianSplatting/blob/main/Plugins/NanoGS/Source/NanoGS/Private/GaussianSplatSceneProxy.cpp
-#if WITH_EDITOR
-			if (ViewFamily.EngineShowFlags.HitProxies)
-			{
-				const FBox LocalBox = GetLocalBounds().GetBox();
-				const FVector3f Min(LocalBox.Min);
-				const FVector3f Max(LocalBox.Max);
-
-				FDynamicMeshBuilder MeshBuilder(Views[ViewIndex]->GetFeatureLevel());
-
-				// Tangent basis (arbitrary – not shaded, just needs to be valid)
-				const FVector2f UV(0.f, 0.f);
-				const FVector3f TX(1.f, 0.f, 0.f);
-				const FVector3f TY(0.f, 1.f, 0.f);
-				const FVector3f TZ(0.f, 0.f, 1.f);
-				const FColor White = FColor::White;
-
-				// 8 corners  (named by which axes are at Max: 0=Min, 1=Max)
-				const uint32 V000 = MeshBuilder.AddVertex(FVector3f(Min.X, Min.Y, Min.Z), UV, TX, TY, TZ, White);
-				const uint32 V100 = MeshBuilder.AddVertex(FVector3f(Max.X, Min.Y, Min.Z), UV, TX, TY, TZ, White);
-				const uint32 V010 = MeshBuilder.AddVertex(FVector3f(Min.X, Max.Y, Min.Z), UV, TX, TY, TZ, White);
-				const uint32 V110 = MeshBuilder.AddVertex(FVector3f(Max.X, Max.Y, Min.Z), UV, TX, TY, TZ, White);
-				const uint32 V001 = MeshBuilder.AddVertex(FVector3f(Min.X, Min.Y, Max.Z), UV, TX, TY, TZ, White);
-				const uint32 V101 = MeshBuilder.AddVertex(FVector3f(Max.X, Min.Y, Max.Z), UV, TX, TY, TZ, White);
-				const uint32 V011 = MeshBuilder.AddVertex(FVector3f(Min.X, Max.Y, Max.Z), UV, TX, TY, TZ, White);
-				const uint32 V111 = MeshBuilder.AddVertex(FVector3f(Max.X, Max.Y, Max.Z), UV, TX, TY, TZ, White);
-
-
-				TArray<uint32> Indices =
-				{
-					V000, V010, V100,
-					V010, V110, V100,
-
-					V001, V101, V011,
-					V101, V111, V011,
-
-					V000, V100, V001,
-					V100, V101, V001,
-
-					V010, V011, V110,
-					V011, V111, V110,
-
-					V000, V001, V010,
-					V001, V011, V010,
-
-					V100, V110, V101,
-					V110, V111, V101,
-				};
-
-				MeshBuilder.AddTriangles(Indices);
-
-				// bDisableBackfaceCulling=true so all faces are drawn regardless of winding.
-				UMaterialInterface* HitMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
-				MeshBuilder.GetMesh(
-					GetLocalToWorld(),
-					HitMaterial->GetRenderProxy(),
-					SDPG_World,
-					/*bDisableBackfaceCulling=*/true,
-					/*bReceivesDecals=*/true,
-					/*bUseSelectionOutline=*/true,
-					ViewIndex,
-					Collector,
-					SelectionHitProxy);
-			}
-#endif // WITH_EDITOR
 		}
 	}
 }
