@@ -1,3 +1,4 @@
+#include "Gaussians.h"
 #include "GSViewExtension.h"
 #include "GaussianSplatResource.h"
 #include "GaussianSplatSceneProxy.h"
@@ -185,7 +186,7 @@ void FGSViewExtension::GaussianSplattingPass(
 {
 	// Don't call this when there are no proxies
 	check(!Proxies.IsEmpty());
-	bool bRelighting = (*Proxies.FindArbitraryElement())->SupportsRelighting();
+	bool bRelighting = (*Proxies.FindArbitraryElement())->SupportsRelighting() && Gaussians::IsRelightingEnabled_RenderThread();
 
 	check(InView.bIsViewInfo);
 	const FViewInfo& ViewInfo = static_cast<const FViewInfo&>(InView);

@@ -1,5 +1,6 @@
 #include "GSViewExtension.h"
 
+#include "Gaussians.h"
 #include "GaussianSplatSceneProxy.h"
 #include "Rendering/GSGPUStats.h"
 
@@ -111,7 +112,7 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 	}
 
 	// Process relightable proxies
-	if (!RelightableProxies.IsEmpty())
+	if (!RelightableProxies.IsEmpty() && Gaussians::IsRelightingEnabled_RenderThread())
 	{
 		FGSplatGBuffer GSplatGBuffer;
 		GSplatGBuffer.Init(GraphBuilder, InView);
@@ -130,7 +131,7 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 	const FPostProcessingInputs& Inputs)
 {
 	// Render all splats that don't support relighting
-	if (!NonRelightableProxies.IsEmpty())
+	if (!NonRelightableProxies.IsEmpty() || !Gaussians::IsRelightingEnabled_RenderThread())
 	{
 		check(InView.bIsViewInfo);
 		const FViewInfo& ViewInfo = static_cast<const FViewInfo&>(InView);
@@ -148,7 +149,17 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 			SceneDepthTexture, ERenderTargetLoadAction::ELoad, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthRead_StencilNop
 		};
 
-		GaussianSplattingPass(GraphBuilder, InView, RenderTargets, NonRelightableProxies, GPUStats.Get());
+		if (!Gaussians::IsRelightingEnabled_RenderThread())
+		{
+			// If relighting is disabled, then render all relightable gaussians with non-relightable gaussians
+			TSet<FGaussianSplatSceneProxy*> AllProxies = RelightableProxies.Union(NonRelightableProxies);
+
+			GaussianSplattingPass(GraphBuilder, InView, RenderTargets, AllProxies, GPUStats.Get());
+		}
+		else
+		{
+			GaussianSplattingPass(GraphBuilder, InView, RenderTargets, NonRelightableProxies, GPUStats.Get());
+		}
 	}
 }
 

@@ -1,5 +1,6 @@
 #include "GaussianSplatSceneProxy.h"
 
+#include "Gaussians.h"
 #include "GaussianSplatComponent.h"
 #include "GaussianSplatResource.h"
 #include "GaussianSplatVertexFactory.h"
@@ -142,7 +143,7 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 				RenderBounds(PDI, ViewFamily.EngineShowFlags, GetBounds(), true);
 			}
 
-			if (VertexFactory.IsInitialized() && ShadowMaterialProxy)
+			if (VertexFactory.IsInitialized() && ShadowMaterialProxy && Gaussians::IsShadowsEnabled())
 			{
 				FMeshBatch& Batch = Collector.AllocateMesh();
 
