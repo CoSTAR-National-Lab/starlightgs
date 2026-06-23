@@ -15,6 +15,22 @@
 #define ENABLE_RELIGHTING true
 #endif
 
+#ifndef THREADGROUP_DIVISOR
+#define THREADGROUP_DIVISOR 1
+#endif
+
+Buffer<uint> IndexCounter;
+RWBuffer<uint> RWIndirectArgs;
+
+[numthreads(1, 1, 1)]
+void GSSetupIndirectArgsCS()
+{
+	uint NumThreads = IndexCounter[0];
+	RWIndirectArgs[0] = (NumThreads + THREADGROUP_DIVISOR - 1) / THREADGROUP_DIVISOR;
+	RWIndirectArgs[1] = 1;
+	RWIndirectArgs[2] = 1;
+}
+
 
 // Check isnan(value) before use.
 uint order_preserving_float_map(float value)
@@ -56,6 +72,8 @@ float2 UnpackMetallicRoughness(uint PackedMR)
 	return float2(f16tof32(PackedMR >> 16), f16tof32(PackedMR));
 }
 
+Buffer<uint> SplatIndexBuffer;
+Buffer<uint> SplatIndexCounter;
 
 RWBuffer<uint> Counter;
 
@@ -78,10 +96,6 @@ uint BufferCapacity;
 float SplatScaleMultiplier;
 float SplatOpacityThreshold;
 
-uint NumClippingVolumes;
-StructuredBuffer<FGaussians_ClippingVolume> ClippingVolumes;
-uint ClippingVolumeMask;
-
 
 float3x3 VecToScaleMatrix(in float3 Scale)
 {
@@ -91,7 +105,6 @@ float3x3 VecToScaleMatrix(in float3 Scale)
 		0.0f, 0.0f, Scale.z
 	);
 }
-
 
 // Mixed Rendering Pipeline
 // 1. GSPrepass
@@ -121,19 +134,21 @@ groupshared uint GS_Depth[THREADGROUP_SIZE_1D];
 [numthreads(THREADGROUP_SIZE_1D, 1, 1)]
 void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_GroupID, uint GroupIndex : SV_GroupIndex)
 {
-    // Init counter
-    if (DispatchThreadId.x == 0)
-    {
-        Counter[0] = 4; // 4 vertices for a quad in a triangle strip
+	if (DispatchThreadId.x == 0)
+	{
+		Counter[0] = 4; // 4 vertices for a quad in a triangle strip
+	}
+
+	uint SplatIndex = (uint)-1;
+	if (DispatchThreadId.x < SplatIndexCounter[0])
+	{
+		SplatIndex = SplatIndexBuffer[DispatchThreadId.x];
 	}
 
 	if (GroupIndex == 0)
 	{
 		GS_NumSplats = 0;
 	}
-
-	// Unwrap group ID
-	uint SplatIndex = GetUnWrappedDispatchThreadId(GroupId, GroupIndex, THREADGROUP_SIZE_1D);
 
 	GroupMemoryBarrierWithGroupSync();
 
@@ -185,46 +200,6 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_
 			false
 		);
 		bVisible &= FrustumCullData.bIsVisible;
-
-		// Cull against clipping volumes
-		if (bVisible)
-		{
-			float3 Min = TranslatedWorldPosition.xyz - WorldSpaceExtent;
-			float3 Max = TranslatedWorldPosition.xyz + WorldSpaceExtent;
-
-			for (uint i = 0; i < NumClippingVolumes; i++)
-			{
-				FGaussians_ClippingVolume ClippingVolume = ClippingVolumes[i];
-				if ((ClippingVolumeMask & ClippingVolume.Mask) == 0)
-				{
-					continue;
-				}
-
-				switch (ClippingVolume.Mode)
-				{
-				case GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ALL:
-					bVisible &= !(all(Min > ClippingVolume.Min) && all(Max < ClippingVolume.Max));
-					break;
-				case GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ANY:
-					bVisible &= any(Max < ClippingVolume.Min) || any(Min > ClippingVolume.Max);
-					break;
-				case GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ALL:
-					bVisible &= !(any(Max < ClippingVolume.Min) || any(Min > ClippingVolume.Max));
-					break;
-				case GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ANY:
-					bVisible &= all(Min > ClippingVolume.Min) && all(Max < ClippingVolume.Max);
-					break;
-				default:
-					break;
-				}
-
-				if (!bVisible)
-				{
-					break;
-				}
-			}
-
-		}
 
 		if (bVisible)
 		{

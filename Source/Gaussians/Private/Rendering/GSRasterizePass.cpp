@@ -44,21 +44,21 @@ class FGSPrepassCS : public FGlobalShader
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+
 		SHADER_PARAMETER_STRUCT_REF(FGaussianSplatShaderResources, GSResource)
 		SHADER_PARAMETER_STRUCT_REF(FPrimitiveUniformShaderParameters, Primitive)
+
+		SHADER_PARAMETER_SRV(Buffer<uint>, SplatIndexBuffer)
+		SHADER_PARAMETER_SRV(Buffer<uint>, SplatIndexCounter)
 
 		SHADER_PARAMETER(float, SplatScaleMultiplier)
 		SHADER_PARAMETER(float, SplatOpacityThreshold)
 
 		SHADER_PARAMETER_STRUCT_INCLUDE(FGaussiansHZBParameters, HZB)
 
-		SHADER_PARAMETER(int32, NumClippingVolumes)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGaussians_ClippingVolume>, ClippingVolumes)
-		SHADER_PARAMETER(uint32, ClippingVolumeMask)
-
 		// Out
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint32>, Counter)
-		
+
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float2>, OutSSPositions)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float4>, OutSSScale)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutConic)
@@ -72,6 +72,8 @@ class FGSPrepassCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutGaussianIDX)
 
 		SHADER_PARAMETER(uint32, BufferCapacity)
+
+		RDG_BUFFER_ACCESS(IndirectArgs, ERHIAccess::IndirectArgs)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
@@ -84,6 +86,26 @@ class FGSPrepassCS : public FGlobalShader
 };
 
 IMPLEMENT_GLOBAL_SHADER(FGSPrepassCS, "/Plugin/Gaussians/GSCompute.usf", "GSPrepass", SF_Compute);
+
+
+class FGSSetupIndirectArgsCS : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FGSSetupIndirectArgsCS)
+	SHADER_USE_PARAMETER_STRUCT(FGSSetupIndirectArgsCS, FGlobalShader);
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_SRV(Buffer<uint>, IndexCounter)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint3>, RWIndirectArgs)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("THREADGROUP_DIVISOR"), FGSPrepassCS::GetThreadGroupSize1D());
+	}
+};
+
+IMPLEMENT_GLOBAL_SHADER(FGSSetupIndirectArgsCS, "/Plugin/Gaussians/GSCompute.usf", "GSSetupIndirectArgsCS", SF_Compute);
 
 
 class FSplattingPassVS : public FGlobalShader
@@ -154,26 +176,11 @@ using FRelitDepthStencilState = TStaticDepthStencilState<false, CF_Always>;
 using FUnlitDepthStencilState = TStaticDepthStencilState<false, CF_DepthNearOrEqual>;
 
 
-int32 ConvertClippingMode(EGaussianSplatClippingVolumeMode Mode)
-{
-	switch (Mode) {
-	case EGaussianSplatClippingVolumeMode::ClipAnyInside:  return GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ANY;
-	case EGaussianSplatClippingVolumeMode::ClipAllInside:  return GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ALL;
-	case EGaussianSplatClippingVolumeMode::ClipAnyOutside: return GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ANY;
-	case EGaussianSplatClippingVolumeMode::ClipAllOutside: return GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ALL;
-	default:
-		checkNoEntry(); break;
-	}
-	return -1;
-}
-
-
 void FGSViewExtension::GaussianSplattingPass(
 	FRDGBuilder& GraphBuilder, 
 	const FSceneView& InView,
 	const FRenderTargetBindingSlots& RenderTargets,
 	const TSet<FGaussianSplatSceneProxy*>& Proxies,
-	const TArray<FGSClippingVolumeParameters>& ClippingVolumes,
 	const FGSGPUStats* GPUStats)
 {
 	// Don't call this when there are no proxies
@@ -186,7 +193,6 @@ void FGSViewExtension::GaussianSplattingPass(
 	// Create transient buffers
 	int32 Capacity = CVarGaussiansMaxSplats.GetValueOnRenderThread();
 
-	FRDGBufferRef IndirectArgsBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateIndirectDesc<FRHIDrawIndirectParameters>(), TEXT("Gaussians.IndirectArgs"));
 	FRDGBufferRef NDCPositionsBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(FVector2f), Capacity), TEXT("Gaussians.NDCPositions"));
 	FRDGBufferRef NDCScalesBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(FVector4f), Capacity), TEXT("Gaussians.NDCScales"));
 	FRDGBufferRef ConicsBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), Capacity), TEXT("Gaussians.Conics"));
@@ -204,45 +210,20 @@ void FGSViewExtension::GaussianSplattingPass(
 		MetallicRoughnessBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity), TEXT("Gaussians.MetallicRoughness"));
 	}
 
-	// Build buffer of clipping volumes (if there are any in use)
-	const int32 NumClippingVolumes = ClippingVolumes.Num();
-	FRDGBufferRef ClippingVolumesBuffer = ClippingVolumes.IsEmpty()
-		? GSystemTextures.GetDefaultStructuredBuffer(GraphBuilder, sizeof(FGaussians_ClippingVolume))
-		: GraphBuilder.CreateBuffer(
-			FRDGBufferDesc::CreateStructuredDesc(sizeof(FGaussians_ClippingVolume), NumClippingVolumes),
-			TEXT("Gaussians.ClippingVolumes")
-	);
-
-	// Build clipping volume shader data
-	if (NumClippingVolumes > 0)
-	{
-		FGaussians_ClippingVolume* ClippingVolumeShaderData = GraphBuilder.AllocPODArray<FGaussians_ClippingVolume>(NumClippingVolumes);
-		const FVector& PreViewTranslation = ViewInfo.ViewMatrices.GetPreViewTranslation();
-
-		auto WritePtr = ClippingVolumeShaderData;
-		for (const auto& Volume : ClippingVolumes)
-		{
-			WritePtr->Min = static_cast<FVector3f>(Volume.Bounds.Min + PreViewTranslation);
-			WritePtr->Max = static_cast<FVector3f>(Volume.Bounds.Max + PreViewTranslation);
-			WritePtr->Mode = ConvertClippingMode(Volume.Mode);
-			WritePtr->Mask = Volume.Mask;
-
-			WritePtr++;
-		}
-
-		// Safe to no copy since initial data was allocated via graph builder
-		GraphBuilder.QueueBufferUpload(ClippingVolumesBuffer, ClippingVolumeShaderData, NumClippingVolumes * sizeof(FGaussians_ClippingVolume), ERDGInitialDataFlags::NoCopy);
-	}
+	// Setup indirect args
+	FRDGBufferRef ComputeIndirectArgs = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateIndirectDesc<FRHIDispatchIndirectParameters>(), TEXT("Gaussians.ComputeIndirectArgs"));
+	FRDGBufferRef RasterIndirectArgsBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateIndirectDesc<FRHIDrawIndirectParameters>(), TEXT("Gaussians.RasterIndirectArgs"));
 
 	// Clear Indirect ARGS
 	// Vertex count per instance will be set by dispatch thread 0
-	AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(IndirectArgsBuffer, PF_R32_UINT), 0);
+	AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(RasterIndirectArgsBuffer, PF_R32_UINT), 0);
 
 	const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(InView.GetShaderPlatform());
 
 	FSplattingPermutationDomain Permutation;
 	Permutation.Set<FPermutationEnableRelighting>(bRelighting);
 
+	TShaderMapRef<FGSSetupIndirectArgsCS> SetupIndirectArgsCS(ShaderMap);
 	TShaderMapRef<FGSPrepassCS> PrePassShader(ShaderMap, Permutation);
 	TShaderMapRef<FSplattingPassVS> VertexShader(ShaderMap, Permutation);
 	TShaderMapRef<FSplattingPassPS> PixelShader(ShaderMap, Permutation);
@@ -250,8 +231,6 @@ void FGSViewExtension::GaussianSplattingPass(
 	bool bAnySplatsRendered = false;
 	for (auto Proxy : Proxies)
 	{
-		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: PrePass");
-
 		FBoxSphereBounds ProxyBounds = Proxy->GetBounds();
 		if (!InView.GetCullingFrustum().IntersectBox(ProxyBounds.Origin, ProxyBounds.BoxExtent))
 		{
@@ -259,8 +238,25 @@ void FGSViewExtension::GaussianSplattingPass(
 		}
 		bAnySplatsRendered = true;
 
-		FGaussianSplatResource* Resource = Proxy->GetResource_RenderThread();
+		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: PrePass");
 
+		// Set up indirect args for this splat
+		{
+			FGSSetupIndirectArgsCS::FParameters* PassParameters = GraphBuilder.AllocParameters<FGSSetupIndirectArgsCS::FParameters>();
+			PassParameters->IndexCounter = Proxy->GetIndexCountBufferSRV();
+			PassParameters->RWIndirectArgs = GraphBuilder.CreateUAV(ComputeIndirectArgs, PF_R32_UINT);
+
+			FComputeShaderUtils::AddPass(
+				GraphBuilder,
+				RDG_EVENT_NAME("GSCopyIndirectArgs"),
+				ERDGPassFlags::Compute | ERDGPassFlags::NeverCull,
+				SetupIndirectArgsCS,
+				PassParameters,
+				FIntVector(1, 1, 1)
+			);
+		}
+
+		FGaussianSplatResource* Resource = Proxy->GetResource_RenderThread();
 		auto SplatCount  = Resource->GetSplatCount();
 
 		if (bRelighting)
@@ -275,46 +271,46 @@ void FGSViewExtension::GaussianSplattingPass(
 		TUniformBufferRef<FGaussianSplatShaderResources> ResourceUniformBuffer = TUniformBufferRef<FGaussianSplatShaderResources>{ Resource->GetUniformBuffer() };
 		TUniformBufferRef<FPrimitiveUniformShaderParameters> PrimitiveUniformBuffer = TUniformBufferRef<FPrimitiveUniformShaderParameters>{ Proxy->GetUniformBuffer() };
 
-		auto Parameters = GraphBuilder.AllocParameters<FGSPrepassCS::FParameters>();
+		FGSPrepassCS::FParameters* PassParameters = GraphBuilder.AllocParameters<FGSPrepassCS::FParameters>();
+		PassParameters->View = InView.ViewUniformBuffer;
 
-		Parameters->View = InView.ViewUniformBuffer;
-		Parameters->GSResource = ResourceUniformBuffer;
-		Parameters->Primitive = PrimitiveUniformBuffer;
+		PassParameters->GSResource = ResourceUniformBuffer;
+		PassParameters->Primitive = PrimitiveUniformBuffer;
 
-		Parameters->SplatScaleMultiplier = Proxy->GetScaleMultiplier();
-		Parameters->SplatOpacityThreshold = CVarGaussiansOpacityThreshold.GetValueOnRenderThread();
+		PassParameters->SplatIndexBuffer = Proxy->GetIndexBufferSRV();
+		PassParameters->SplatIndexCounter = Proxy->GetIndexCountBufferSRV();
 
-		Parameters->HZB = Gaussians::GetHZBParameters(GraphBuilder, ViewInfo, Gaussians::EHZBType::FurthestHZB);
+		PassParameters->SplatScaleMultiplier = Proxy->GetScaleMultiplier();
+		PassParameters->SplatOpacityThreshold = CVarGaussiansOpacityThreshold.GetValueOnRenderThread();
 
-		Parameters->NumClippingVolumes = NumClippingVolumes;
-		Parameters->ClippingVolumes = GraphBuilder.CreateSRV(ClippingVolumesBuffer);
-		Parameters->ClippingVolumeMask = static_cast<uint32>(Proxy->GetClippingVolumeMask());
+		PassParameters->HZB = Gaussians::GetHZBParameters(GraphBuilder, ViewInfo, Gaussians::EHZBType::FurthestHZB);
 
-		Parameters->Counter = GraphBuilder.CreateUAV(IndirectArgsBuffer, PF_R32_UINT);
+		PassParameters->Counter = GraphBuilder.CreateUAV(RasterIndirectArgsBuffer, PF_R32_UINT);
 
-		Parameters->OutSSPositions = GraphBuilder.CreateUAV(NDCPositionsBuffer, PF_G32R32F);
-		Parameters->OutSSScale = GraphBuilder.CreateUAV(NDCScalesBuffer, PF_A32B32G32R32F);
-		Parameters->OutConic = GraphBuilder.CreateUAV(ConicsBuffer);
-		Parameters->OutColorOpacity = GraphBuilder.CreateUAV(ColorOpacityBuffer, PF_A32B32G32R32F);
-		Parameters->OutGaussianIDX = GraphBuilder.CreateUAV(GaussianIndexBuffer, PF_R32_UINT);
-		Parameters->OutDepth = GraphBuilder.CreateUAV(GaussianDepthBuffer, PF_R32_UINT);
+		PassParameters->OutSSPositions = GraphBuilder.CreateUAV(NDCPositionsBuffer, PF_G32R32F);
+		PassParameters->OutSSScale = GraphBuilder.CreateUAV(NDCScalesBuffer, PF_A32B32G32R32F);
+		PassParameters->OutConic = GraphBuilder.CreateUAV(ConicsBuffer);
+		PassParameters->OutColorOpacity = GraphBuilder.CreateUAV(ColorOpacityBuffer, PF_A32B32G32R32F);
+		PassParameters->OutGaussianIDX = GraphBuilder.CreateUAV(GaussianIndexBuffer, PF_R32_UINT);
+		PassParameters->OutDepth = GraphBuilder.CreateUAV(GaussianDepthBuffer, PF_R32_UINT);
 
 		if (bRelighting)
 		{
-			Parameters->OutNormal = GraphBuilder.CreateUAV(NormalBuffer, PF_R32_UINT);
-			Parameters->OutMetallicRoughness = GraphBuilder.CreateUAV(MetallicRoughnessBuffer, PF_R32_UINT);
+			PassParameters->OutNormal = GraphBuilder.CreateUAV(NormalBuffer, PF_R32_UINT);
+			PassParameters->OutMetallicRoughness = GraphBuilder.CreateUAV(MetallicRoughnessBuffer, PF_R32_UINT);
 		}
 
-		Parameters->BufferCapacity = Capacity;
+		PassParameters->BufferCapacity = Capacity;
 
-		FIntVector DispatchSize = FComputeShaderUtils::GetGroupCountWrapped(SplatCount, FGSPrepassCS::GetThreadGroupSize1D());
+		PassParameters->IndirectArgs = ComputeIndirectArgs;
 
 		FComputeShaderUtils::AddPass<FGSPrepassCS>(
 			GraphBuilder,
 			RDG_EVENT_NAME("GSPrepass"),
 			PrePassShader,
-			Parameters,
-			DispatchSize
+			PassParameters,
+			ComputeIndirectArgs,
+			/*IndirectArgsOffset:*/ 0
 		);
 	}
 
@@ -336,7 +332,7 @@ void FGSViewExtension::GaussianSplattingPass(
 			InKeys,
 			InValues, 
 			0,
-			IndirectArgsBuffer,
+			RasterIndirectArgsBuffer,
 			1,
 			UINT32_MAX, 
 			GMaxRHIFeatureLevel,
@@ -367,7 +363,7 @@ void FGSViewExtension::GaussianSplattingPass(
 			PassParameters->VertexShader.VS_MetallicRoughness = GraphBuilder.CreateSRV(MetallicRoughnessBuffer, PF_R32_UINT);
 		}
 
-		PassParameters->VertexShader.IndirectArgs = IndirectArgsBuffer;
+		PassParameters->VertexShader.IndirectArgs = RasterIndirectArgsBuffer;
 
 		PassParameters->PixelShader.View = InView.ViewUniformBuffer;
 		// TODO: Verify quantity of render targets based on whether relighting is enabled or not
@@ -419,7 +415,7 @@ void FGSViewExtension::GaussianSplattingPass(
 		GPUStats->SetStatFromGPU(
 			GraphBuilder, 
 			bRelighting ? FGSGPUStats::Stat_LitSplatsRendered : FGSGPUStats::Stat_UnlitSplatsRendered,
-			IndirectArgsBuffer,
+			RasterIndirectArgsBuffer,
 			sizeof(uint32)
 		);
 	}

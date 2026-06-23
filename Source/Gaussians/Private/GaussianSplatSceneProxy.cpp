@@ -7,6 +7,8 @@
 #include "GSWorldSubsystem.h"
 #include "GSViewExtension.h"
 
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FGaussianSplatPrimitiveShaderResources, "GSPrimitiveResources")
+
 
 FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(UGaussianSplatComponent* InComponent)
 	: FPrimitiveSceneProxy(InComponent)
@@ -48,8 +50,18 @@ void FGaussianSplatSceneProxy::CreateRenderThreadResources(FRHICommandListBase& 
 
 	if (GaussianSplatResource_RenderThread)
 	{
+		CreateIndexBufferResources(RHICmdList);
+
+		// Create the primitive data uniform buffer to be used by the vertex factory (ownership is passed to vertex factory)
+		FGaussianSplatPrimitiveShaderResources Parameters;
+		Parameters.SplatIndexBuffer = IndexBufferSRV;
+		Parameters.SplatIndexCountBuffer = IndexCountBufferSRV;
+		FUniformBufferRHIRef SplatPrimitiveUniformBuffer = TUniformBufferRef<FGaussianSplatPrimitiveShaderResources>::CreateUniformBufferImmediate(
+			Parameters, UniformBuffer_MultiFrame);
+
 		VertexFactory.InitResource(RHICmdList);
 		VertexFactory.SetGSplatDataUniformBuffer(GaussianSplatResource_RenderThread->GetResource()->GetUniformBuffer());
+		VertexFactory.SetGSplatPrimitiveDataUniformBuffer(MoveTemp(SplatPrimitiveUniformBuffer));
 
 		if (auto ViewExt = ViewExtension.Pin())
 		{
@@ -65,11 +77,21 @@ void FGaussianSplatSceneProxy::DestroyRenderThreadResources()
 
 	if (GaussianSplatResource_RenderThread)
 	{
-		VertexFactory.ReleaseResource();
-
 		if (auto ViewExt = ViewExtension.Pin())
 		{
 			ViewExt->UnregisterProxy(this);
+		}
+
+		VertexFactory.ReleaseResource();
+
+		{
+			IndexCountBufferSRV.SafeRelease();
+			IndexCountBufferUAV.SafeRelease();
+			IndexCountBuffer.SafeRelease();
+
+			IndexBufferSRV.SafeRelease();
+			IndexBufferUAV.SafeRelease();
+			IndexBuffer.SafeRelease();
 		}
 
 		GaussianSplatResource_RenderThread.Reset();
@@ -144,6 +166,8 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 				FMeshBatchElement& MeshElement = Batch.Elements[0];
 				MeshElement.IndexBuffer = nullptr;
 				MeshElement.FirstIndex = 0;
+
+				// TODO: Use indirect arguments to draw shadow (draw indirect args are already populated and stored in IndexCountBuffer)
 				// One quad per splat -> 2 triangles per quad
 				MeshElement.NumPrimitives = 2 * GaussianSplatResource_RenderThread->GetResource()->GetSplatCount();
 				MeshElement.NumInstances = 1;
@@ -162,8 +186,98 @@ FGaussianSplatResource* FGaussianSplatSceneProxy::GetResource_RenderThread() con
 	return GaussianSplatResource_RenderThread->GetResource();
 }
 
+FRHIShaderResourceView* FGaussianSplatSceneProxy::GetIndexBufferSRV() const
+{
+	check(IsInRenderingThread());
+	return IndexBufferSRV;
+}
+
+FRHIUnorderedAccessView* FGaussianSplatSceneProxy::GetIndexBufferUAV() const
+{
+	check(IsInRenderingThread());
+	return IndexBufferUAV;
+}
+
+FRHIShaderResourceView* FGaussianSplatSceneProxy::GetIndexCountBufferSRV() const
+{
+	check(IsInRenderingThread());
+	return IndexCountBufferSRV;
+}
+
+FRHIUnorderedAccessView* FGaussianSplatSceneProxy::GetIndexCountBufferUAV() const
+{
+	check(IsInRenderingThread());
+	return IndexCountBufferUAV;
+}
+
+bool FGaussianSplatSceneProxy::RequiresNewCullingPass() const
+{
+	return bRequiresIndexBufferUpdate;
+}
+
+void FGaussianSplatSceneProxy::MarkIndexBufferUpdated()
+{
+	bRequiresIndexBufferUpdate = false;
+}
+
 bool FGaussianSplatSceneProxy::SupportsRelighting() const
 {
 	check(IsInRenderingThread());
 	return GaussianSplatResource_RenderThread->GetResource()->SupportsRelighting();
+}
+
+void FGaussianSplatSceneProxy::CreateIndexBufferResources(FRHICommandListBase& RHICmdList)
+{
+	check(IsInRenderingThread());
+
+	uint32 NumSplats = GaussianSplatResource_RenderThread->GetResource()->GetSplatCount();
+
+	FRHIBufferCreateDesc CreateDesc = FRHIBufferCreateDesc::Create(
+		TEXT("GSplatProxyIndexBuffer"),
+		sizeof(uint32) * NumSplats,
+		sizeof(uint32),
+		EBufferUsageFlags::ShaderResource | EBufferUsageFlags::UnorderedAccess
+	).DetermineInitialState();
+	IndexBuffer = RHICmdList.CreateBuffer(CreateDesc);
+
+	IndexBufferSRV = RHICmdList.CreateShaderResourceView(
+		IndexBuffer,
+		FRHIViewDesc::CreateBufferSRV()
+		.SetTypeFromBuffer(IndexBuffer)
+		.SetFormat(PF_R32_UINT)
+	);
+
+	IndexBufferUAV = RHICmdList.CreateUnorderedAccessView(
+		IndexBuffer,
+		FRHIViewDesc::CreateBufferUAV()
+		.SetTypeFromBuffer(IndexBuffer)
+		.SetFormat(PF_R32_UINT)
+	);
+
+	CreateDesc = FRHIBufferCreateDesc::Create(
+		TEXT("GSplatProxyIndexCountBuffer"),
+		sizeof(FRHIDrawIndirectParameters),
+		sizeof(uint32),
+		EBufferUsageFlags::ShaderResource | EBufferUsageFlags::UnorderedAccess | EBufferUsageFlags::DrawIndirect
+	).DetermineInitialState()
+		.SetInitActionInitializer();
+
+	FRHIBufferInitializer Initializer = RHICmdList.CreateBufferInitializer(CreateDesc);
+	FRHIDrawIndirectParameters DrawParameters{ 0, 1, 0, 0 };
+	Initializer.WriteData(&DrawParameters, sizeof(DrawParameters));
+	IndexCountBuffer = Initializer.Finalize();
+
+	IndexCountBufferSRV = RHICmdList.CreateShaderResourceView(
+		IndexCountBuffer,
+		FRHIViewDesc::CreateBufferSRV()
+		.SetTypeFromBuffer(IndexCountBuffer)
+		.SetFormat(PF_R32_UINT)
+	);
+
+	IndexCountBufferUAV = RHICmdList.CreateUnorderedAccessView(
+		IndexCountBuffer,
+		FRHIViewDesc::CreateBufferUAV()
+		.SetTypeFromBuffer(IndexCountBuffer)
+		.SetFormat(PF_R32_UINT)
+	);
 }

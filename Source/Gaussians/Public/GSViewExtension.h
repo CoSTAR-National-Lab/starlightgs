@@ -50,7 +50,6 @@ private:
 		const FSceneView& InView, 
 		const FRenderTargetBindingSlots& RenderTargets, 
 		const TSet<FGaussianSplatSceneProxy*>& Proxies,
-		const TArray<FGSClippingVolumeParameters>& ClippingVolumes,
 		const FGSGPUStats* GPUStats
 	);
 
@@ -59,6 +58,17 @@ private:
 		FRDGBuilder& GraphBuilder, 
 		const FSceneView& InView, 
 		const FGSplatGBuffer& GSplatGBuffer
+	);
+
+	// Creates an index buffer of all non-culled splats
+	// The index buffer is then stored along with the proxy
+	// The index buffer only needs recalculated when splats or culling volumes move
+	static void GSCullingPass(
+		FRDGBuilder& GraphBuilder,
+		const FSceneView& InView,
+		const TSet<FGaussianSplatSceneProxy*>& Proxies,
+		const TArray<FGSClippingVolumeParameters>& ClippingVolumes,
+		bool bForceEnable
 	);
 
 public:

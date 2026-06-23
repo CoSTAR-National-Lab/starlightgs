@@ -54,11 +54,6 @@ void UGaussianSplatComponent::OnUnregister()
 
 FPrimitiveSceneProxy* UGaussianSplatComponent::CreateSceneProxy()
 {
-	bCastDynamicShadow = true;
-	//GetUsedMaterials(OuMaterials)
-
-
-
 	return new FGaussianSplatSceneProxy(this);
 }
 

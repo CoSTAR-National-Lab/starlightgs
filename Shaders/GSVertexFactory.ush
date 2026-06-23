@@ -388,7 +388,13 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
     	float2(1, 1)
 	};
 
-    uint SplatIndex = Input.VertexId / 6;
+	uint Index = Input.VertexId / 6;
+	if (Index > GSPrimitiveResources.SplatIndexCountBuffer[0])
+	{
+		FVertexFactoryIntermediates DummyIntermediates = (FVertexFactoryIntermediates)0;
+		return DummyIntermediates;
+	}
+	uint SplatIndex = GSPrimitiveResources.SplatIndexBuffer[Input.VertexId / 6];
 
     Intermediates.LocalPos = float4(Quad[Input.VertexId % 6], 0, 1);
 
@@ -586,7 +592,12 @@ float3 VertexFactoryGetWorldNormal(FPositionAndNormalOnlyVertexFactoryInput Inpu
     FDFMatrix LocalToWorld = SceneData.Primitive.LocalToWorld;
     float3 InvScale = SceneData.Primitive.InvNonUniformScale;
 
-    uint SplatIndex = Input.VertexId / 6;
+	uint Index = Input.VertexId / 6;
+	if (Index > GSPrimitiveResources.SplatIndexCountBuffer[0])
+	{
+		return float3(0, 0, 0);
+	}
+	uint SplatIndex = GSPrimitiveResources.SplatIndexBuffer[Index];
 	float3 Normal = GSResources.Normals[SplatIndex];
 
 #if USE_INSTANCING

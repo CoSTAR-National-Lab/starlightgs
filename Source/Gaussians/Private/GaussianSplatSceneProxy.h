@@ -9,6 +9,11 @@ class FGaussianSplatResource;
 class FGaussianSplatResourceWrapper;
 class FGSViewExtension;
 
+BEGIN_UNIFORM_BUFFER_STRUCT(FGaussianSplatPrimitiveShaderResources, )
+	SHADER_PARAMETER_SRV(Buffer<uint>, SplatIndexBuffer)
+	SHADER_PARAMETER_SRV(Buffer<uint>, SplatIndexCountBuffer)
+END_UNIFORM_BUFFER_STRUCT()
+
 
 class FGaussianSplatSceneProxy : public FPrimitiveSceneProxy
 {
@@ -33,15 +38,38 @@ public:
 
 	FGaussianSplatResource* GetResource_RenderThread() const;
 
+	FRHIShaderResourceView* GetIndexBufferSRV() const;
+	FRHIUnorderedAccessView* GetIndexBufferUAV() const;
+
+	FRHIShaderResourceView* GetIndexCountBufferSRV() const;
+	FRHIUnorderedAccessView* GetIndexCountBufferUAV() const;
+
+	bool RequiresNewCullingPass() const;
+	void MarkIndexBufferUpdated();
+
 	bool SupportsRelighting() const;
 
 	inline float GetScaleMultiplier() const { return ScaleMultiplier; }
 	inline int32 GetClippingVolumeMask() const { return ClippingVolumeMask; }
 
 private:
+
+	void CreateIndexBufferResources(FRHICommandListBase& RHICmdList);
+
+private:
 	// GPU Resources for the asset pointed to by the component
 	// It is NOT safe to dereference this pointer on the game thread
 	TSharedPtr<FGaussianSplatResourceWrapper> GaussianSplatResource_RenderThread;
+
+	FBufferRHIRef IndexBuffer = nullptr;
+	FShaderResourceViewRHIRef IndexBufferSRV = nullptr;
+	FUnorderedAccessViewRHIRef IndexBufferUAV = nullptr;
+
+	FBufferRHIRef IndexCountBuffer = nullptr;
+	FShaderResourceViewRHIRef IndexCountBufferSRV = nullptr;
+	FUnorderedAccessViewRHIRef IndexCountBufferUAV = nullptr;
+
+	bool bRequiresIndexBufferUpdate = true;
 
 	TWeakPtr<FGSViewExtension> ViewExtension;
 

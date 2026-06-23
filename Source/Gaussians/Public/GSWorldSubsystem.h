@@ -25,7 +25,8 @@ public:
 	void AddClippingVolume(const AGaussianSplatClippingVolume* ClippingVolume);
 	void RemoveClippingVolume(const AGaussianSplatClippingVolume* ClippingVolume);
 
-	inline const TArray<const AGaussianSplatClippingVolume*>& GetClippingVolumes();
+	// Also removes all nullptr clipping volumes from list (occurs when a volume is removed from the world but not yet destroyed)
+	const TArray<const AGaussianSplatClippingVolume*>& GetClippingVolumes();
 
 private:
 	TSharedPtr<class FGSViewExtension> GaussianRendererViewExtension;
