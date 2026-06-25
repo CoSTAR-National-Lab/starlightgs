@@ -143,9 +143,7 @@ ComputeSplatParameters(
 	// View properties
 	in float4x4 TranslatedWorldToView,
     in float4x4 ViewToClip,
-    in float4x4 SVPositionToTranslatedWorld,
     in float4 ViewSizeAndInvSize,
-    in float2 ProjectionSize,
     in float2 TanHalfFOV,
 	in float4x4 ViewToTranslatedWorld, //camera matrix
 	in FDFVector3 PreViewTranslation,
@@ -163,10 +161,7 @@ ComputeSplatParameters(
     out float3 OutWorldNormal
 )
 {
-	float4 TranslatedWorldPosition = TransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld);
-
-    // Fixes all the maths...
-	TranslatedWorldPosition.xyz *= 0.01f;
+	
 
     float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz);
     float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(GSResources.Orientations[SplatIndex]));
@@ -177,6 +172,11 @@ ComputeSplatParameters(
 
     if (IsOrthoProjection(ViewToClip))
     {
+        float4 TranslatedWorldPosition = TransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld);
+
+    	// Fixes all the maths...
+        TranslatedWorldPosition.xyz *= 0.01f;
+
         float3x3 R = (float3x3) ViewToTranslatedWorld;
         float3x3 covView = mul(R, mul(Covariance3D, transpose(R)));
 
@@ -262,94 +262,92 @@ ComputeSplatParameters(
           float3x3 covView;
           float SplatZScale = 1.f;
 
+		  float3 TranslatedWorldPositionNaniteView = TransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld).xyz;
+          TranslatedWorldPositionNaniteView += DFFastSubtractDemote(PreViewTranslation, ResolvedView.PreViewTranslation);
+
           if (!IsOrthoProjection(ViewToClip))
           {
-              float4 ViewPosition = mul(TranslatedWorldPosition, TranslatedWorldToView);
+              float4 ViewPosition = mul(float4(TranslatedWorldPositionNaniteView, 1), TranslatedWorldToView);
 
-              SplatZScale = ViewPosition.z / ViewPosition.w;
-			// Calculate Jacobian matrix based off of projection matrix
-			// Perspective jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
-              float FocalZ = ViewSizeAndInvSize.y / (2.0f * TanHalfFOV.y);
+              ViewPosition.xyz *= 0.01f;
 
+          	  SplatZScale = ViewPosition.z / ViewPosition.w;
+          	  // Calculate Jacobian matrix based off of projection matrix
+          	  // // Perspective jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
+              float FocalZ = ViewSizeAndInvSize.y / (2.f* TanHalfFOV.y);
               float LimX = 1.3f * TanHalfFOV.x;
               float LimY = 1.3f * TanHalfFOV.y;
 
               float TxTz = ViewPosition.x / ViewPosition.z;
               float TyTz = ViewPosition.y / ViewPosition.z;
 
-			// Clamped versions of TxTz and TyTz 
+			  //// Clamped versions of TxTz and TyTz 
               float Tx = min(LimX, max(-LimX, TxTz)) * ViewPosition.z;
               float TY = min(LimY, max(-LimY, TyTz)) * ViewPosition.z;
 
               float3x3 J = float3x3(
-			FocalZ / ViewPosition.z, 0.0f, -(FocalZ * Tx) / (ViewPosition.z * ViewPosition.z),
-			0.0f, FocalZ / ViewPosition.z, -(FocalZ * TY) / (ViewPosition.z * ViewPosition.z),
-			0.0f, 0.0f, 0.0f
-			);
+			  FocalZ / ViewPosition.z, 0.0f, -(FocalZ * Tx) / (ViewPosition.z * ViewPosition.z),
+			  0.0f, FocalZ / ViewPosition.z, -(FocalZ * TY) / (ViewPosition.z * ViewPosition.z),
+			  0.0f, 0.0f, 0.0f
+			  );
 
               float3x3 JW = mul(J, transpose((float3x3) ViewToTranslatedWorld));
               covView = mul(JW, mul(transpose(Covariance3D), transpose(JW)));
           }
-
-		{
-               float X = covView[0][0];
-               float Y = covView[1][1];
-               float Covariance = covView[0][1];
+			
+		  {
+              float X = covView[0][0] + 0.3f;
+          	  float Y = covView[1][1] + 0.3f;
+              float Covariance = covView[0][1];
 
 			// Determine conic for the splat
-               float Determinant = X * Y - Covariance * Covariance;
-               float3 Conic = float3(Y, Covariance, X) / Determinant;
+              float Determinant = X * Y - Covariance * Covariance;
+              float3 Conic = float3(Y, Covariance, X) / Determinant;
 
-               float Mid = (X + Y);
-               float Delta = length(float2((X - Y), (2 * Covariance)));
-		
-               float Lambda1 = 0.5f * (Mid + Delta);
-               float Lambda2 = 0.5f * (Mid - Delta);
+              float Mid = (X + Y);
+              float Delta = length(float2((X - Y), (2 * Covariance)));
+	
+              float Lambda1 = 0.5f * (Mid + Delta);
+              float Lambda2 = 0.5f * (Mid - Delta);
 
-               float4 worldOffset = float4(0, 0, 0, 1);
+              float4 worldOffset = float4(0, 0, 0, 1);
 
-               OutWorldPosition = float4(0, 0, 0, 0);
-               OutSvPosition = float2(0, 0);
-               OutMeanScreenPosition = float2(0, 0);
-               OutConic = float3(0, 0, 0);
-               OutWorldNormal = float3(0, 0, 0);
+              OutWorldPosition = float4(0, 0, 0, 0);
+              OutSvPosition = float2(0, 0);
+              OutMeanScreenPosition = float2(0, 0);
+              OutConic = float3(0, 0, 0);
+              OutWorldNormal = float3(0, 0, 0);
 
-               if (Lambda2 > 0.0f)
-               {
-                   float2 DiagonalVector = normalize(float2((Covariance - Y + Lambda1), (-X + Covariance + Lambda1)));
-                   float2 MajorAxis = 3 * sqrt(Lambda1) * DiagonalVector;
-                   float2 MinorAxis = 3 * sqrt(Lambda2) * float2(DiagonalVector.y, -DiagonalVector.x);
+              if (Lambda2 > 0.0f)
+              {
+                 float2 DiagonalVector = normalize(float2((Covariance - Y + Lambda1), (-X + Covariance + Lambda1))) * SplatZScale * max(TanHalfFOV.x, TanHalfFOV.y);
+                 float2 MajorAxis = 3 * sqrt(Lambda1) * DiagonalVector ;
+                 float2 MinorAxis = 3 * sqrt(Lambda2) * float2(DiagonalVector.y, -DiagonalVector.x) * SplatZScale * max(TanHalfFOV.x, TanHalfFOV.y) * SplatZScale * max(TanHalfFOV.x, TanHalfFOV.y);
 
-			//LocalPosition is Corners of a quad (-1,1)
-			//worldOffset.xyz = LocalPosition.x * float3(0, MajorAxis) + LocalPosition.y * float3(0, MinorAxis);
-                   worldOffset.xyz = LocalPosition.x * float3(MajorAxis, 0) + LocalPosition.y * float3(MinorAxis, 0);
-               };
+              	 //LocalPosition is Corners of a quad (-1,1)
+              	 worldOffset.xyz = LocalPosition.x * float3(MajorAxis, 0) + LocalPosition.y * float3(MinorAxis, 0);
+              };
 
 
 			//worldOffset.xyz = GetCameraRight(ViewToTranslatedWorld) * LocalPosition.x + GetCameraUp(ViewToTranslatedWorld) * LocalPosition.y;
 			//to UU
-               worldOffset *= SplatZScale;
+            //worldOffset.xyz *= ViewZ;
+            //worldOffset.xyz *= SplatZScale;
+            
 
-               float3x3 CamM = (float3x3) ViewToTranslatedWorld;
+          	float3x3 CamM = (float3x3) ViewToTranslatedWorld;
 			//View Space is Local Space
-               worldOffset.xyz = mul(worldOffset.xyz, CamM);
-
-	
-
+          	worldOffset.xyz = mul(worldOffset.xyz, CamM);
+            worldOffset /= worldOffset.w;
 
            	//worldOffset = DFTransformLocalToTranslatedWorld(worldOffset.xyz, Primitive.LocalToWorld, ResolvedView.PreViewTranslation);
-
-			//Apply just the PreViewTranslation but leave the view rotation intact.
-			//#if UE_DF_NO_FAST_MATH
-			//	float3 TranslatedWorldPositionOrigin = DFAddDemote(DFGetOrigin(LocalToWorld), PreViewTranslation);
-			//#else
-			//  float3 TranslatedWorldPositionOrigin = DFFastLocalSubtractDemote(Primitive.LocalToWorld.PostTranslation, DFNegate(ResolvedView.PreViewTranslation)) + Primitive.LocalToWorld.M[3].xyz;
-           	//#endif
 	
+         
+
 			 //OutSvPosition = float2(0, 0);
 			 //OutMeanScreenPosition = float2(0, 0);
-          	TranslatedWorldPosition.xyz *= 100.f;
-          	OutWorldPosition = TranslatedWorldPosition + float4(worldOffset.xyz, 1);
+          	//TranslatedWorldPosition.xyz *= 100.f;
+            OutWorldPosition = float4(TranslatedWorldPositionNaniteView + worldOffset.xyz - DFFastSubtractDemote(PreViewTranslation, ResolvedView.PreViewTranslation), 1);
           	//OutWorldPosition = TranslatedWorldPosition * 100.f +float4(worldOffset.xyz, 1);
           	//OutWorldPosition = DFTransformLocalToTranslatedWorld(worldOffset.xyz, Primitive.LocalToWorld, ResolvedView.PreViewTranslation);
           	
@@ -425,9 +423,6 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 	uint PackedPageInfo = InstanceCulling_PageInfoBuffer[Intermediates.SceneData.InstanceIdLoadIndex];
 	FPageInfo PageInfo = UnpackPageInfo(PackedPageInfo);
 	FNaniteView NaniteView = UnpackNaniteView(ShadowDepthPass_PackedNaniteViews[PageInfo.ViewId]);
-
-	// ProjectionSize is the size (in world units) of the orthographic view frustum
-	float2 ProjectionSize = float2(2.0f / NaniteView.ViewToClip[0][0], 2.0f / NaniteView.ViewToClip[1][1]);
 #endif
 
     ComputeSplatParameters(
@@ -435,10 +430,8 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 #if VIRTUAL_SM_ENABLED
 		NaniteView.TranslatedWorldToView,
 		NaniteView.ViewToClip,
-		NaniteView.SVPositionToTranslatedWorld,
-		NaniteView.ViewSizeAndInvSize ,
-		ProjectionSize,
-		//0.0f, // TODO: need to calculate from projection matrix if using punctual light
+		//NaniteView.ViewSizeAndInvSize ,
+		float4(128, 128, 1.f/128.f, 1.f/128.f), // VSM page is 128 pixels squared, its size is fixed in WS
 		float2(1.0f / NaniteView.ViewToClip[0][0], 1.0f / NaniteView.ViewToClip[1][1]),
 		NaniteView.ViewToTranslatedWorld,
 		NaniteView.PreViewTranslation,
@@ -446,9 +439,7 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 #else
         ResolvedView.TranslatedWorldToView,
         ResolvedView.ViewToClip,
-        ResolvedView.SVPositionToTranslatedWorld,
         ResolvedView.ViewSizeAndInvSize,
-        ResolvedView.ViewSizeAndInvSize.xy,
         ResolvedView.TanAndInvTanHalfFOV.xy,
         //float2(1.0f / ResolvedView.ViewToClip[0][0], 1.0f / ResolvedView.ViewToClip[1][1]),
 		ResolvedView.ViewToTranslatedWorld,
