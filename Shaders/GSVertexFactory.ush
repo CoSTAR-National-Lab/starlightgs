@@ -134,7 +134,6 @@ float3 GetCameraForward(float3x3 ViewToTranslatedWorld)
     return CameraForward;
 }
 
-
 /**
  * Projects splat into screen space based off of view provided
  */
@@ -161,8 +160,6 @@ ComputeSplatParameters(
     out float3 OutWorldNormal
 )
 {
-	
-
     float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz);
     float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(GSResources.Orientations[SplatIndex]));
 
@@ -258,7 +255,6 @@ ComputeSplatParameters(
     }
 	else
     {
-
           float3x3 covView;
           float SplatZScale = 1.f;
 
@@ -269,12 +265,12 @@ ComputeSplatParameters(
           {
               float4 ViewPosition = mul(float4(TranslatedWorldPositionNaniteView, 1), TranslatedWorldToView);
 
-              ViewPosition.xyz *= 0.01f;
+          	  ViewPosition.xyz *= 0.01f;
 
           	  SplatZScale = ViewPosition.z / ViewPosition.w;
           	  // Calculate Jacobian matrix based off of projection matrix
           	  // // Perspective jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
-              float FocalZ = ViewSizeAndInvSize.y / (2.f* TanHalfFOV.y);
+              float FocalZ = ViewSizeAndInvSize.y / (2.f * TanHalfFOV.y);
               float LimX = 1.3f * TanHalfFOV.x;
               float LimY = 1.3f * TanHalfFOV.y;
 
@@ -300,7 +296,7 @@ ComputeSplatParameters(
           	  float Y = covView[1][1] + 0.3f;
               float Covariance = covView[0][1];
 
-			// Determine conic for the splat
+			  // Determine conic for the splat
               float Determinant = X * Y - Covariance * Covariance;
               float3 Conic = float3(Y, Covariance, X) / Determinant;
 
@@ -321,8 +317,8 @@ ComputeSplatParameters(
               if (Lambda2 > 0.0f)
               {
                  float2 DiagonalVector = normalize(float2((Covariance - Y + Lambda1), (-X + Covariance + Lambda1))) * SplatZScale * max(TanHalfFOV.x, TanHalfFOV.y);
-                 float2 MajorAxis = 3 * sqrt(Lambda1) * DiagonalVector ;
-                 float2 MinorAxis = 3 * sqrt(Lambda2) * float2(DiagonalVector.y, -DiagonalVector.x) * SplatZScale * max(TanHalfFOV.x, TanHalfFOV.y) * SplatZScale * max(TanHalfFOV.x, TanHalfFOV.y);
+                 float2 MajorAxis = 3 * sqrt(Lambda1) * DiagonalVector;
+                 float2 MinorAxis = 3 * sqrt(Lambda2) * float2(DiagonalVector.y, -DiagonalVector.x);
 
               	 //LocalPosition is Corners of a quad (-1,1)
               	 worldOffset.xyz = LocalPosition.x * float3(MajorAxis, 0) + LocalPosition.y * float3(MinorAxis, 0);
@@ -338,14 +334,15 @@ ComputeSplatParameters(
           	float3x3 CamM = (float3x3) ViewToTranslatedWorld;
 			//View Space is Local Space
           	worldOffset.xyz = mul(worldOffset.xyz, CamM);
+          	worldOffset.xyz = worldOffset.xyz * 0.5;
             worldOffset /= worldOffset.w;
 
            	//worldOffset = DFTransformLocalToTranslatedWorld(worldOffset.xyz, Primitive.LocalToWorld, ResolvedView.PreViewTranslation);
 	
          
 
-			 //OutSvPosition = float2(0, 0);
-			 //OutMeanScreenPosition = float2(0, 0);
+			//OutSvPosition = float2(0, 0);
+          	//OutMeanScreenPosition = float2(0, 0);
           	//TranslatedWorldPosition.xyz *= 100.f;
             OutWorldPosition = float4(TranslatedWorldPositionNaniteView + worldOffset.xyz - DFFastSubtractDemote(PreViewTranslation, ResolvedView.PreViewTranslation), 1);
           	//OutWorldPosition = TranslatedWorldPosition * 100.f +float4(worldOffset.xyz, 1);
@@ -457,6 +454,9 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
         Intermediates.Conic,
         Intermediates.Normal
 	);
+
+
+
 
 
 
