@@ -53,6 +53,10 @@ public:
 	bool ShouldImportHighOrderSH() const;
 	bool ShouldImportMetallicRoughness() const;
 
+	bool ShouldPopulateMetallicRoughnessWithDefault() const;
+	inline float GetDefaultMetallicValue() const { return MetallicDefaultValue; }
+	inline float GetDefaultRoughnessValue() const { return RoughnessDefaultValue; }
+
 	inline float GetScaleFactor() const { return ScaleFactor; }
 
 	bool GetBaseColorIsRGB() const;
@@ -84,10 +88,12 @@ private:
 	UGSplatImportData* ImportData = nullptr;
 
 	TSharedPtr<SButton> ImportButton = nullptr;
+
 	TSharedPtr<SCheckBox> ImportNormalsCheckBox = nullptr;
 	TSharedPtr<SCheckBox> ImportHighOrderSHCheckBox = nullptr;
 	TSharedPtr<SCheckBox> ImportMetallicRoughnessCheckBox = nullptr;
-	TSharedPtr<SNumericEntryBox<float>> ScaleFactoryEntryBox = nullptr;
+	TSharedPtr<SCheckBox> PopulateMetallicRoughnessCheckBox = nullptr;
+
 	TSharedPtr<SCheckBox> BaseColorRGBCheckBox = nullptr;
 	TSharedPtr<SCheckBox> ApplyGammaCorrectionCheckBox = nullptr;
 	TSharedPtr<SCheckBox> OpacityAsAlphaCheckBox = nullptr;
@@ -99,6 +105,9 @@ private:
 	TWeakPtr<SWindow> WidgetWindow = nullptr;
 
 	float ScaleFactor = 0.0f;
+
+	float MetallicDefaultValue = 0.0f;
+	float RoughnessDefaultValue = 0.0f;
 
 	bool bShouldImport = false;
 };

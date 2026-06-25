@@ -79,6 +79,9 @@ void SGSplatImportWindow::Construct(const FArguments& InArgs)
 
 	ScaleFactor = ImportData->ScaleFactor;
 
+	MetallicDefaultValue = ImportData->MetallicDefaultValue;
+	RoughnessDefaultValue = ImportData->RoughnessDefaultValue;
+
 	TSharedPtr<SBox> InspectorBox;
 	this->ChildSlot
 	[
@@ -157,6 +160,38 @@ void SGSplatImportWindow::Construct(const FArguments& InArgs)
 				.ToolTipText(LOCTEXT("ImportMetallicRoughnessCheckBoxTooltip", "Import per-splat metallic/roughness properties."))
 				.IsChecked(ImportData->bHasMetallicRoughness ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
 				.IsEnabled(ImportData->bHasMetallicRoughness);
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("PopMetallicRoughnessWithDefaultCheckBoxLabel", "Populate Metallic/Roughness With Default"),
+			[this]
+			{
+				return SAssignNew(PopulateMetallicRoughnessCheckBox, SCheckBox)
+					.ToolTipText(LOCTEXT("PopMetallicRoughnessWithDefaultCheckBoxTooltip", "Populate per-splat metallic/roughness properties with a default value."))
+					.IsChecked(ImportData->bPopulateMRWithDefault ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+					.IsEnabled(!ImportData->bHasMetallicRoughness);
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("MetallicDefaultLabel", "Metallic Default Value"),
+			[this]
+			{
+				return SNew(SSpinBox<float>)
+					.ToolTipText(LOCTEXT("MetallicDefaultTooltip", "Default metallic value to assign to every splat."))
+					.Value_Lambda([this] { return MetallicDefaultValue; })
+					.OnValueChanged_Lambda([this](float Val) { MetallicDefaultValue = Val; })
+					.IsEnabled_Lambda([this](){ return PopulateMetallicRoughnessCheckBox->IsChecked(); });
+			}
+		)
+		+ AddOptionSlot(
+			LOCTEXT("RoughnessDefaultLabel", "Roughness Default Value"),
+			[this]
+			{
+				return SNew(SSpinBox<float>)
+					.ToolTipText(LOCTEXT("RoughnessDefaultTooltip", "Default roughness value to assign to every splat."))
+					.Value_Lambda([this] { return RoughnessDefaultValue; })
+					.OnValueChanged_Lambda([this](float Val) { RoughnessDefaultValue = Val; })
+					.IsEnabled_Lambda([this](){ return PopulateMetallicRoughnessCheckBox->IsChecked(); });
 			}
 		)
 		+ AddOptionSlot(
@@ -319,6 +354,11 @@ bool SGSplatImportWindow::ShouldImportHighOrderSH() const
 bool SGSplatImportWindow::ShouldImportMetallicRoughness() const
 {
 	return ImportMetallicRoughnessCheckBox->IsChecked();
+}
+
+bool SGSplatImportWindow::ShouldPopulateMetallicRoughnessWithDefault() const
+{
+	return PopulateMetallicRoughnessCheckBox->IsChecked();
 }
 
 bool SGSplatImportWindow::GetBaseColorIsRGB() const
