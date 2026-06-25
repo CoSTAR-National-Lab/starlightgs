@@ -51,6 +51,9 @@ public:
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 	//~ End UPrimitiveComponent Interface
 
+	UFUNCTION(Category="Default", CallInEditor)
+	void ExportClippedSplat();
+
 private:
 	UFUNCTION()
 	void OnAssetUpdated();

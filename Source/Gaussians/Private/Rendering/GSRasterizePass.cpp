@@ -16,6 +16,7 @@
 #include "Rendering/GPURadixSort.h"
 
 #include "GaussiansDefinitions.h"
+#include "GSDispatchHelper.h"
 
 
 static TAutoConsoleVariable<int32> CVarGaussiansMaxSplats(
@@ -87,26 +88,6 @@ class FGSPrepassCS : public FGlobalShader
 };
 
 IMPLEMENT_GLOBAL_SHADER(FGSPrepassCS, "/Plugin/Gaussians/GSCompute.usf", "GSPrepass", SF_Compute);
-
-
-class FGSSetupIndirectArgsCS : public FGlobalShader
-{
-	DECLARE_GLOBAL_SHADER(FGSSetupIndirectArgsCS)
-	SHADER_USE_PARAMETER_STRUCT(FGSSetupIndirectArgsCS, FGlobalShader);
-
-	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-		SHADER_PARAMETER_SRV(Buffer<uint>, IndexCounter)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint3>, RWIndirectArgs)
-	END_SHADER_PARAMETER_STRUCT()
-
-	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
-	{
-		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
-		OutEnvironment.SetDefine(TEXT("THREADGROUP_DIVISOR"), FGSPrepassCS::GetThreadGroupSize1D());
-	}
-};
-
-IMPLEMENT_GLOBAL_SHADER(FGSSetupIndirectArgsCS, "/Plugin/Gaussians/GSCompute.usf", "GSSetupIndirectArgsCS", SF_Compute);
 
 
 class FSplattingPassVS : public FGlobalShader
@@ -224,7 +205,6 @@ void FGSViewExtension::GaussianSplattingPass(
 	FSplattingPermutationDomain Permutation;
 	Permutation.Set<FPermutationEnableRelighting>(bRelighting);
 
-	TShaderMapRef<FGSSetupIndirectArgsCS> SetupIndirectArgsCS(ShaderMap);
 	TShaderMapRef<FGSPrepassCS> PrePassShader(ShaderMap, Permutation);
 	TShaderMapRef<FSplattingPassVS> VertexShader(ShaderMap, Permutation);
 	TShaderMapRef<FSplattingPassPS> PixelShader(ShaderMap, Permutation);
@@ -242,20 +222,12 @@ void FGSViewExtension::GaussianSplattingPass(
 		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: PrePass");
 
 		// Set up indirect args for this splat
-		{
-			FGSSetupIndirectArgsCS::FParameters* PassParameters = GraphBuilder.AllocParameters<FGSSetupIndirectArgsCS::FParameters>();
-			PassParameters->IndexCounter = Proxy->GetIndexCountBufferSRV();
-			PassParameters->RWIndirectArgs = GraphBuilder.CreateUAV(ComputeIndirectArgs, PF_R32_UINT);
-
-			FComputeShaderUtils::AddPass(
-				GraphBuilder,
-				RDG_EVENT_NAME("GSCopyIndirectArgs"),
-				ERDGPassFlags::Compute | ERDGPassFlags::NeverCull,
-				SetupIndirectArgsCS,
-				PassParameters,
-				FIntVector(1, 1, 1)
-			);
-		}
+		Gaussians::AddSetupDispatchIndirectArgsPass(
+			GraphBuilder,
+			Proxy->GetIndexCountBufferSRV(),
+			ComputeIndirectArgs,
+			FGSPrepassCS::GetThreadGroupSize1D()
+		);
 
 		FGaussianSplatResource* Resource = Proxy->GetResource_RenderThread();
 		auto SplatCount  = Resource->GetSplatCount();

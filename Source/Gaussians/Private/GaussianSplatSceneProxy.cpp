@@ -199,6 +199,12 @@ FRHIUnorderedAccessView* FGaussianSplatSceneProxy::GetIndexBufferUAV() const
 	return IndexBufferUAV;
 }
 
+FRHIBuffer* FGaussianSplatSceneProxy::GetIndexCountBuffer() const
+{
+	check(IsInRenderingThread());
+	return IndexCountBuffer;
+}
+
 FRHIShaderResourceView* FGaussianSplatSceneProxy::GetIndexCountBufferSRV() const
 {
 	check(IsInRenderingThread());

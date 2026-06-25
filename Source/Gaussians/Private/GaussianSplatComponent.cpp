@@ -1,6 +1,7 @@
 #include "GaussianSplatComponent.h"
 
 #include "GaussianSplatSceneProxy.h"
+#include "GSWorldSubsystem.h"
 
 
 #if WITH_EDITOR
@@ -79,6 +80,14 @@ void UGaussianSplatComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutM
 	//register material used for splats if any, this will propagate to proxy and permute shader with custom vertex factory.
 	if (SplatMaterial)
 		OutMaterials.Add(SplatMaterial);
+}
+
+void UGaussianSplatComponent::ExportClippedSplat()
+{
+	if (UGSWorldSubsystem* WorldSubsystem = GetWorld()->GetSubsystem<UGSWorldSubsystem>())
+	{
+		WorldSubsystem->ExportClippedSplat(this);
+	}
 }
 
 void UGaussianSplatComponent::OnAssetUpdated()

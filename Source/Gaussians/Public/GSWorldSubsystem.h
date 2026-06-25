@@ -28,6 +28,10 @@ public:
 	// Also removes all nullptr clipping volumes from list (occurs when a volume is removed from the world but not yet destroyed)
 	const TArray<const AGaussianSplatClippingVolume*>& GetClippingVolumes();
 
+	// Create a new splat asset by applying clipping volumes in the scene to an existing splat model
+	// Don't call every frame as this will stall game thread on render thread
+	void ExportClippedSplat(class UGaussianSplatComponent* Component);
+
 private:
 	TSharedPtr<class FGSViewExtension> GaussianRendererViewExtension;
 

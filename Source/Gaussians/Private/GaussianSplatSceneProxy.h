@@ -41,6 +41,7 @@ public:
 	FRHIShaderResourceView* GetIndexBufferSRV() const;
 	FRHIUnorderedAccessView* GetIndexBufferUAV() const;
 
+	FRHIBuffer* GetIndexCountBuffer() const;
 	FRHIShaderResourceView* GetIndexCountBufferSRV() const;
 	FRHIUnorderedAccessView* GetIndexCountBufferUAV() const;
 

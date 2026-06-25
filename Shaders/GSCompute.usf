@@ -15,22 +15,6 @@
 #define ENABLE_RELIGHTING true
 #endif
 
-#ifndef THREADGROUP_DIVISOR
-#define THREADGROUP_DIVISOR 1
-#endif
-
-Buffer<uint> IndexCounter;
-RWBuffer<uint> RWIndirectArgs;
-
-[numthreads(1, 1, 1)]
-void GSSetupIndirectArgsCS()
-{
-	uint NumThreads = IndexCounter[0];
-	RWIndirectArgs[0] = (NumThreads + THREADGROUP_DIVISOR - 1) / THREADGROUP_DIVISOR;
-	RWIndirectArgs[1] = 1;
-	RWIndirectArgs[2] = 1;
-}
-
 
 // Check isnan(value) before use.
 uint order_preserving_float_map(float value)
