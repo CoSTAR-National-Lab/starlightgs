@@ -112,7 +112,17 @@ FPrimitiveViewRelevance FGaussianSplatSceneProxy::GetViewRelevance(const FSceneV
 
 	FPrimitiveViewRelevance Result;
 
-	Result.bDrawRelevance = IsShown(View); // View->Family->EngineShowFlags.HitProxies; //IsShown(View); //false;// ; // to draw only shadows
+	Result.bDrawRelevance =
+		IsShown(View)
+		& !View->bIsGameView
+		& View->Family->EngineShowFlags.Game
+#ifdef WITH_EDITOR
+		| View->Family->EngineShowFlags.HitProxies
+#endif
+	    ; 
+	
+	//Result.bDrawRelevance = View->Family->EngineShowFlags.HitProxies; //IsShown(View); //false;// ; // to draw only shadows
+
 	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
 	Result.bRenderInMainPass = ShouldRenderInMainPass();
 	Result.bRenderInDepthPass = ShouldRenderInDepthPass();

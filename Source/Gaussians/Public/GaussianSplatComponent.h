@@ -31,6 +31,8 @@ public:
 
 public:
 
+	UGaussianSplatComponent();
+
 	//~ Begin UObject Interface
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -62,8 +64,7 @@ class GAUSSIANS_API AGaussianSplatActor : public AActor
 {
 	GENERATED_UCLASS_BODY()
 
-protected:
-
+public:
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Gaussian Splats", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UGaussianSplatComponent> GaussianSplatComponent;
 };

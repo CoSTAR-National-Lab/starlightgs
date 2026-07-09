@@ -2,6 +2,15 @@
 
 #include "GaussianSplatSceneProxy.h"
 
+UGaussianSplatComponent::UGaussianSplatComponent()
+{
+	static ConstructorHelpers::FObjectFinder<UMaterial> MaterialFinder(TEXT("/Gaussians/Materials/M_SplatShadowMaterial.M_SplatShadowMaterial"));
+
+	if (MaterialFinder.Succeeded())
+	{
+		SplatMaterial = MaterialFinder.Object;
+	}
+}
 
 #if WITH_EDITOR
 void UGaussianSplatComponent::PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent)

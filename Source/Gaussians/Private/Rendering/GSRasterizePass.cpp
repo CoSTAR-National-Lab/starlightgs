@@ -253,7 +253,7 @@ void FGSViewExtension::GaussianSplattingPass(
 		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: PrePass");
 
 		FBoxSphereBounds ProxyBounds = Proxy->GetBounds();
-		if (!InView.GetCullingFrustum().IntersectBox(ProxyBounds.Origin, ProxyBounds.BoxExtent))
+		if (!InView.GetCullingFrustum().IntersectBox(ProxyBounds.Origin, ProxyBounds.BoxExtent) | !Proxy->IsShown(&InView))
 		{
 			continue;
 		}
