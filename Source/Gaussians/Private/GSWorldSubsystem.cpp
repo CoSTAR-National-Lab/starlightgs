@@ -36,3 +36,8 @@ const TArray<const AGaussianSplatClippingVolume*>& UGSWorldSubsystem::GetClippin
 	ClippingVolumes.RemoveAll([](const auto& Element){ return Element == nullptr; });
 	return ClippingVolumes;
 }
+
+bool UGSWorldSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
+{
+	return WorldType == EWorldType::Game || WorldType == EWorldType::Editor || WorldType == EWorldType::PIE || WorldType == EWorldType::Type::EditorPreview || WorldType == EWorldType::Type::GamePreview;
+}

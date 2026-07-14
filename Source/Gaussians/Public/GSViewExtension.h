@@ -75,4 +75,6 @@ private:
 	TArray<FGSClippingVolumeParameters> ClippingVolumeParameters;
 
 	TPimplPtr<FGSGPUStats> GPUStats = nullptr;
+
+	TAtomic<bool> bShouldRender{ false };
 };

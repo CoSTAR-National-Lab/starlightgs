@@ -122,7 +122,11 @@ void FGSViewExtension::PostRenderViewFamily_RenderThread(FRDGBuilder& GraphBuild
 bool FGSViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const
 {
 	//check if main viewport is valid and if the world of the context match the world of the owning subsystem
-	return Context.GetWorld() == OwningSubsystem->GetWorld() && !CVarGaussiansDisableViewExtension.GetValueOnGameThread();
+	return
+		(
+			Context.GetWorld() == OwningSubsystem->GetWorld()
+		) && 
+		!CVarGaussiansDisableViewExtension.GetValueOnGameThread();
 }
 
 void FGSViewExtension::RegisterProxy(FGaussianSplatSceneProxy* Proxy)

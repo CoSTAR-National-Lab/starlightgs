@@ -56,6 +56,11 @@ private:
 
 private:
 	TObjectPtr<UGSplatAsset> PrevGaussianSplatAsset = nullptr;
+
+#if WITH_EDITORONLY_DATA
+	UPROPERTY()
+	UTexture2D* SpriteTexture;
+#endif
 };
 
 

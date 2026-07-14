@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GaussianSplatComponent.h"
 #include "Subsystems/WorldSubsystem.h"
 
 #include "GSWorldSubsystem.generated.h"
@@ -26,6 +27,9 @@ public:
 	void RemoveClippingVolume(const AGaussianSplatClippingVolume* ClippingVolume);
 
 	inline const TArray<const AGaussianSplatClippingVolume*>& GetClippingVolumes();
+
+protected:
+	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
 private:
 	TSharedPtr<class FGSViewExtension> GaussianRendererViewExtension;

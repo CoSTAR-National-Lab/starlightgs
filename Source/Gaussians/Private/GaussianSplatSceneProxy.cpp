@@ -115,7 +115,8 @@ FPrimitiveViewRelevance FGaussianSplatSceneProxy::GetViewRelevance(const FSceneV
 	Result.bDrawRelevance =
 		IsShown(View)
 		& !View->bIsGameView
-		& View->Family->EngineShowFlags.Game
+		& !View->Family->EngineShowFlags.Editor
+		& !View->Family->EngineShowFlags.Game
 #ifdef WITH_EDITOR
 		| View->Family->EngineShowFlags.HitProxies
 #endif

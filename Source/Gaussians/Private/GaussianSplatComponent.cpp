@@ -1,6 +1,7 @@
 #include "GaussianSplatComponent.h"
-
 #include "GaussianSplatSceneProxy.h"
+#include "GSWorldSubsystem.h"
+#include "Components/BillboardComponent.h"
 
 UGaussianSplatComponent::UGaussianSplatComponent()
 {
@@ -10,6 +11,18 @@ UGaussianSplatComponent::UGaussianSplatComponent()
 	{
 		SplatMaterial = MaterialFinder.Object;
 	}
+
+#if WITH_EDITORONLY_DATA
+	bVisualizeComponent = true;
+
+	static ConstructorHelpers::FObjectFinder<UTexture2D> SpriteFinder(TEXT("/Gaussians/Splidget.Splidget"));
+
+	if (SpriteFinder.Succeeded())
+	{
+		SpriteTexture = SpriteFinder.Object;
+	}
+
+#endif
 }
 
 #if WITH_EDITOR
@@ -30,6 +43,11 @@ void UGaussianSplatComponent::PostEditChangeProperty(struct FPropertyChangedEven
 			GaussianSplatAsset->OnAssetUpdate.AddDynamic(this, &UGaussianSplatComponent::OnAssetUpdated);
 		}
 	}
+
+	if (SpriteTexture && SpriteComponent)
+	{
+		SpriteComponent->SetSprite(SpriteTexture);
+	}
 }
 #endif
 
@@ -42,6 +60,13 @@ void UGaussianSplatComponent::OnRegister()
 	{
 		GaussianSplatAsset->OnAssetUpdate.AddDynamic(this, &UGaussianSplatComponent::OnAssetUpdated);
 	}
+
+	#ifdef WITH_EDITORONLY_DATA
+	if (SpriteTexture && SpriteComponent)
+	{
+		SpriteComponent->SetSprite(SpriteTexture);
+	}
+	#endif
 }
 
 void UGaussianSplatComponent::OnUnregister()

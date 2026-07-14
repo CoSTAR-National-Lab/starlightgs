@@ -1,4 +1,6 @@
 #include "GaussiansEditorModule.h"
+
+#include "GaussianSplatComponent.h"
 #include "Modules/ModuleManager.h"
 
 
@@ -13,6 +15,9 @@ void FGaussiansEditor::StartupModule()
 
 	FrostingAssetTypeActions = MakeShared<FFrostingAssetTypeActions>();
 	FAssetToolsModule::GetModule().Get().RegisterAssetTypeActions(FrostingAssetTypeActions.ToSharedRef());
+
+	ComponentAssetBroker = MakeShared<FGSplatCommponentAssetBroker>();
+	FComponentAssetBrokerage::RegisterBroker(ComponentAssetBroker, UGaussianSplatComponent::StaticClass(), true, true);
 }
 
 void FGaussiansEditor::ShutdownModule()
@@ -21,6 +26,11 @@ void FGaussiansEditor::ShutdownModule()
 	{
 		AssetTools->Get().UnregisterAssetTypeActions(GSplatAssetTypeActions.ToSharedRef());
 		AssetTools->Get().UnregisterAssetTypeActions(FrostingAssetTypeActions.ToSharedRef());
+	}
+
+	if (ComponentAssetBroker.IsValid())
+	{
+		FComponentAssetBrokerage::UnregisterBroker(ComponentAssetBroker);
 	}
 }
 

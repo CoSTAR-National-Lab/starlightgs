@@ -10,9 +10,7 @@ UGSplatActorFactory::UGSplatActorFactory()
 {
 	DisplayName = FText::FromString("GSplatActorFactory");
 	NewActorClass = AGaussianSplatActor::StaticClass();
-	bUseSurfaceOrientation = true;
-
-
+    bUseSurfaceOrientation = true;
 }
 
 bool UGSplatActorFactory::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
