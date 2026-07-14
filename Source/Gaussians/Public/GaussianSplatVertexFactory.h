@@ -22,19 +22,24 @@ public:
 	};
 	
 	virtual void InitRHI(FRHICommandListBase& RHICmdList) override;
-	
-	static bool ShouldCompilePermutation
-	(const FVertexFactoryShaderPermutationParameters& Parameters);
+
+	virtual void ReleaseRHI() override;
+
+	static bool ShouldCompilePermutation(const FVertexFactoryShaderPermutationParameters& Parameters);
+
 	static void GetPSOPrecacheVertexFetchElements(EVertexInputStreamType VertexInputStreamType, FVertexDeclarationElementList& Elements);
 	static void ValidateCompiledResult(const FVertexFactoryType* Type, EShaderPlatform Platform, const FShaderParameterMap& ParameterMap, TArray<FString>& OutErrors);
 	static void ModifyCompilationEnvironment(const FVertexFactoryShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment);
 
-
-	void SetGSplatDataUniformBuffer(FUniformBufferRHIRef InBuffer) { GSplatDataUniform = InBuffer; }
+	void SetGSplatDataUniformBuffer(FUniformBufferRHIRef InBuffer) { GSplatDataUniform = MoveTemp(InBuffer); }
 	FRHIUniformBuffer* GetGSplatDataUniformBuffer() const { return GSplatDataUniform; }
+
+	void SetGSplatPrimitiveDataUniformBuffer(FUniformBufferRHIRef InBuffer) { GSplatPrimitiveDataUniform = MoveTemp(InBuffer); }
+	FRHIUniformBuffer* GetGSplatPrimitiveDataUniformBuffer() const { return GSplatPrimitiveDataUniform; }
 
 private:
 
-	FUniformBufferRHIRef	GSplatDataUniform;
+	FUniformBufferRHIRef GSplatDataUniform;			 // Data about the gaussian splat model
+	FUniformBufferRHIRef GSplatPrimitiveDataUniform; // Data about the gaussian splats that is per-instance
 
 };

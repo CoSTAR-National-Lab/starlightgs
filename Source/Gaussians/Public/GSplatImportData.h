@@ -48,6 +48,14 @@ public:
 	UPROPERTY()
 	bool bImportMetallicRoughness = false;
 
+	UPROPERTY()
+	bool bPopulateMRWithDefault = false;
+
+	UPROPERTY()
+	float MetallicDefaultValue = 0.0f;
+	UPROPERTY()
+	float RoughnessDefaultValue = 1.0f;
+
 	// Transformation on import
 	UPROPERTY()
 	float ScaleFactor = 100.0f;

@@ -3,6 +3,7 @@
 
 #include "GaussianSplatVertexFactory.h"
 #include "GaussianSplatResource.h"
+#include "GaussianSplatSceneProxy.h"
 #include "MeshMaterialShader.h"
 #include "MeshDrawShaderBindings.h"
 
@@ -32,11 +33,6 @@ class FGaussianSplatVertexFactoryShaderParameters : public FVertexFactoryShaderP
 	DECLARE_TYPE_LAYOUT(FGaussianSplatVertexFactoryShaderParameters, NonVirtual);
 public:
 
-	void Bind(const FShaderParameterMap& ParameterMap)
-	{
-		//ParameterMap.
-	}
-
 	void GetElementShaderBindings(
 		const FSceneInterface* Scene,
 		const FSceneView* View,
@@ -50,10 +46,9 @@ public:
 	{
 		FVertexFactoryShaderParameters::GetElementShaderBindings(Scene, View, Shader, VertexStreamType, FeatureLevel, VertexFactory, BatchElement, ShaderBindings, VertexStreams);
 
-
-		const FGaussianSplatVertexFactory* SplateVF = static_cast<const FGaussianSplatVertexFactory*>(VertexFactory);
-		ShaderBindings.Add(Shader->GetUniformBufferParameter<FGaussianSplatShaderResources>(), SplateVF->GetGSplatDataUniformBuffer());
-		
+		const FGaussianSplatVertexFactory* SplatVertexFactory = static_cast<const FGaussianSplatVertexFactory*>(VertexFactory);
+		ShaderBindings.Add(Shader->GetUniformBufferParameter<FGaussianSplatShaderResources>(), SplatVertexFactory->GetGSplatDataUniformBuffer());
+		ShaderBindings.Add(Shader->GetUniformBufferParameter<FGaussianSplatPrimitiveShaderResources>(), SplatVertexFactory->GetGSplatPrimitiveDataUniformBuffer());
 	}
 };
 
@@ -155,4 +150,12 @@ void FGaussianSplatVertexFactory::InitRHI(FRHICommandListBase& RHICmdList)
 	InitDeclaration(ElementsDefault);
 	InitDeclaration(ElementsPosOnly, EVertexInputStreamType::PositionOnly);
 	InitDeclaration(ElementsPosNormal, EVertexInputStreamType::PositionAndNormalOnly);
+}
+
+void FGaussianSplatVertexFactory::ReleaseRHI()
+{
+	FVertexFactory::ReleaseRHI();
+
+	GSplatPrimitiveDataUniform.SafeRelease();
+	GSplatDataUniform.SafeRelease();
 }

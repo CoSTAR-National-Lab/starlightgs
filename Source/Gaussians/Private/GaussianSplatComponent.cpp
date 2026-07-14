@@ -30,6 +30,13 @@ void UGaussianSplatComponent::PostEditChangeProperty(struct FPropertyChangedEven
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
+	// Stops from crashing when adding splat as component in blueprint
+	// TODO: Splat doesn't render in blueprint viewport though
+	if (HasAnyFlags(RF_ClassDefaultObject) || !IsValid(this))
+	{
+		return;
+	}
+
 	FName PropertyName = PropertyChangedEvent.GetPropertyName();
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(UGaussianSplatComponent, GaussianSplatAsset))
 	{
@@ -81,11 +88,6 @@ void UGaussianSplatComponent::OnUnregister()
 
 FPrimitiveSceneProxy* UGaussianSplatComponent::CreateSceneProxy()
 {
-	bCastDynamicShadow = true;
-	//GetUsedMaterials(OuMaterials)
-
-
-
 	return new FGaussianSplatSceneProxy(this);
 }
 
@@ -111,6 +113,14 @@ void UGaussianSplatComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutM
 	//register material used for splats if any, this will propagate to proxy and permute shader with custom vertex factory.
 	if (SplatMaterial)
 		OutMaterials.Add(SplatMaterial);
+}
+
+void UGaussianSplatComponent::ExportClippedSplat()
+{
+	if (UGSWorldSubsystem* WorldSubsystem = GetWorld()->GetSubsystem<UGSWorldSubsystem>())
+	{
+		WorldSubsystem->ExportClippedSplat(this);
+	}
 }
 
 void UGaussianSplatComponent::OnAssetUpdated()

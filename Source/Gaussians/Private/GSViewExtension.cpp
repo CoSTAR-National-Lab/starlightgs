@@ -1,5 +1,6 @@
 #include "GSViewExtension.h"
 
+#include "Gaussians.h"
 #include "GaussianSplatSceneProxy.h"
 #include "Rendering/GSGPUStats.h"
 
@@ -14,6 +15,8 @@ DEFINE_STAT(STAT_SplatsSubmittedUnlit)
 DEFINE_STAT(STAT_SplatsRenderedLit)
 DEFINE_STAT(STAT_SplatsRenderedUnlit)
 
+DECLARE_GPU_STAT_NAMED(GaussiansLit, TEXT("Gaussians: Lit"));
+
 
 static TAutoConsoleVariable<bool> CVarGaussiansDisableViewExtension(
 	TEXT("r.Gaussians.DisableViewExtension"),
@@ -21,6 +24,14 @@ static TAutoConsoleVariable<bool> CVarGaussiansDisableViewExtension(
 	TEXT("Debug tool to disable primary view rendering via view extension."),
 	ECVF_RenderThreadSafe
 );
+
+static TAutoConsoleVariable<bool> CVarGaussiansForceCullEveryFrame(
+	TEXT("r.Gaussians.CullEveryFrame"),
+	false,
+	TEXT("Forces splat culling (against clipping volumes) to run every frame."),
+	ECVF_RenderThreadSafe
+);
+
 
 FGSViewExtension::FGSViewExtension(const FAutoRegister& AutoRegister, UGSWorldSubsystem* Owner)
 	: FSceneViewExtensionBase(AutoRegister)
@@ -70,11 +81,39 @@ void FGSViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilde
 void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView,
                                                                const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
-	// Process relightable proxies
-	if (!RelightableProxies.IsEmpty())
-	{
-		RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Lit");
+	RDG_EVENT_SCOPE_STAT(GraphBuilder, GaussiansLit, "Gaussians(Lit)");
+	RDG_GPU_STAT_SCOPE(GraphBuilder, GaussiansLit);
+	SCOPED_NAMED_EVENT(GaussiansLit, FColor::Purple);
 
+	// Run culling for all splats that need it
+	{
+		bool bForceEnable = CVarGaussiansForceCullEveryFrame.GetValueOnRenderThread();
+		TSet<FGaussianSplatSceneProxy*> AllProxies = RelightableProxies.Union(NonRelightableProxies);
+
+		bool bRequiresCullingPass = bForceEnable;
+		if (!bForceEnable)
+		{
+			for (auto Proxy : AllProxies)
+			{
+				bRequiresCullingPass |= Proxy->RequiresNewCullingPass();
+			}
+		}
+
+		if (bRequiresCullingPass)
+		{
+			GSCullingPass(
+				GraphBuilder,
+				InView,
+				AllProxies,
+				ClippingVolumeParameters,
+				bForceEnable
+			);
+		}
+	}
+
+	// Process relightable proxies
+	if (!RelightableProxies.IsEmpty() && Gaussians::IsRelightingEnabled_RenderThread())
+	{
 		FGSplatGBuffer GSplatGBuffer;
 		GSplatGBuffer.Init(GraphBuilder, InView);
 
@@ -83,7 +122,7 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 			GSplatGBuffer.Clear(GraphBuilder);
 		}
 
-		GaussianSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(), RelightableProxies, ClippingVolumeParameters, GPUStats.Get());
+		GaussianSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(), RelightableProxies, GPUStats.Get());
 		GSCompositionPass(GraphBuilder, InView, GSplatGBuffer);
 	}
 }
@@ -92,7 +131,7 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 	const FPostProcessingInputs& Inputs)
 {
 	// Render all splats that don't support relighting
-	if (!NonRelightableProxies.IsEmpty())
+	if (!NonRelightableProxies.IsEmpty() || !Gaussians::IsRelightingEnabled_RenderThread())
 	{
 		check(InView.bIsViewInfo);
 		const FViewInfo& ViewInfo = static_cast<const FViewInfo&>(InView);
@@ -110,7 +149,17 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 			SceneDepthTexture, ERenderTargetLoadAction::ELoad, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthRead_StencilNop
 		};
 
-		GaussianSplattingPass(GraphBuilder, InView, RenderTargets, NonRelightableProxies, ClippingVolumeParameters, GPUStats.Get());
+		if (!Gaussians::IsRelightingEnabled_RenderThread())
+		{
+			// If relighting is disabled, then render all relightable gaussians with non-relightable gaussians
+			TSet<FGaussianSplatSceneProxy*> AllProxies = RelightableProxies.Union(NonRelightableProxies);
+
+			GaussianSplattingPass(GraphBuilder, InView, RenderTargets, AllProxies, GPUStats.Get());
+		}
+		else
+		{
+			GaussianSplattingPass(GraphBuilder, InView, RenderTargets, NonRelightableProxies, GPUStats.Get());
+		}
 	}
 }
 

@@ -170,9 +170,6 @@ ComputeSplatParameters(
 
     if (IsOrthoProjection(ViewToClip))
     {
-    	// Fixes all the maths...
-        //TranslatedWorldPosition.xyz *= 0.01f;
-
         float3x3 R = (float3x3) ViewToTranslatedWorld;
         float3x3 covView = mul(R, mul(Covariance3D, transpose(R)));
 
@@ -269,12 +266,8 @@ ComputeSplatParameters(
 
           	  ViewPosition.xyz *= 0.01f;
 
-              //ViewPosition.z = max(ViewPosition.z, 0.01);
-
               SplatZScale = ViewPosition.z / (ViewPosition.w);
           	  SplatZScale = SplatZScale;// * 0.5;
-
-              
 
           	  // Calculate Jacobian matrix based off of projection matrix
           	  // // Perspective jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
@@ -319,6 +312,7 @@ ComputeSplatParameters(
               OutWorldPosition = float4(0, 0, 0, 0);
               //OutSvPosition = float2(0, 0);
               //OutMeanScreenPosition = float2(0, 0);
+
               OutConic = float3(0, 0, 0);
               OutWorldNormal = float3(0, 0, 0);
 
@@ -355,7 +349,7 @@ ComputeSplatParameters(
             OutWorldPosition = float4(TranslatedWorldPositionNaniteView + worldOffset.xyz - DFFastSubtractDemote(PreViewTranslation, ResolvedView.PreViewTranslation), 1);
           	//OutWorldPosition = TranslatedWorldPosition * 100.f +float4(worldOffset.xyz, 1);
           	//OutWorldPosition = DFTransformLocalToTranslatedWorld(worldOffset.xyz, Primitive.LocalToWorld, ResolvedView.PreViewTranslation);
-          	
+
           	//float4 TWP = DFTransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld, PreViewTranslation);
 
           	//TWP.w *= 100.f; //essentailly scales the whole thing down by a 100;
@@ -420,7 +414,13 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
     	float2(1, 1)
 	};
 
-    uint SplatIndex = Input.VertexId / 6;
+	uint Index = Input.VertexId / 6;
+	if (Index > GSPrimitiveResources.SplatIndexCountBuffer[0])
+	{
+		FVertexFactoryIntermediates DummyIntermediates = (FVertexFactoryIntermediates)0;
+		return DummyIntermediates;
+	}
+	uint SplatIndex = GSPrimitiveResources.SplatIndexBuffer[Input.VertexId / 6];
 
     Intermediates.LocalPos = float4(Quad[Input.VertexId % 6], 0, 1);
 
@@ -473,13 +473,6 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
         Intermediates.Conic,
         Intermediates.Normal
 	);
-
-
-
-
-
-
-	
 
     return Intermediates;
 }
@@ -627,7 +620,12 @@ float3 VertexFactoryGetWorldNormal(FPositionAndNormalOnlyVertexFactoryInput Inpu
     FDFMatrix LocalToWorld = SceneData.Primitive.LocalToWorld;
     float3 InvScale = SceneData.Primitive.InvNonUniformScale;
 
-    uint SplatIndex = Input.VertexId / 6;
+	uint Index = Input.VertexId / 6;
+	if (Index > GSPrimitiveResources.SplatIndexCountBuffer[0])
+	{
+		return float3(0, 0, 0);
+	}
+	uint SplatIndex = GSPrimitiveResources.SplatIndexBuffer[Index];
 	float3 Normal = GSResources.Normals[SplatIndex];
 
 #if USE_INSTANCING

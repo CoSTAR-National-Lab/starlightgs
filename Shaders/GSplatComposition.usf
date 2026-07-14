@@ -87,6 +87,8 @@ void GSplatCompositionPS(
 	
 	OutDepth = GBufferData.Depth;
 
+	PSOut.MRT[0] = float4(0, 0, 0, 0);
+
 #if PIXELSHADEROUTPUT_MRT0
 	OutTarget0 = PSOut.MRT[0];
 #endif

@@ -204,7 +204,7 @@ bool GSplatImporter::ImportPly(const UGSplatImportData& ImportData, happly::PLYD
 	// Skipping high-order SH for now
 	Splats.bHasHighOrderSH = false;
 
-	Splats.bHasMetallicRoughness = ImportData.bImportMetallicRoughness;
+	Splats.bHasMetallicRoughness = ImportData.bImportMetallicRoughness || ImportData.bPopulateMRWithDefault;
 
 	// Important to declare available optional fields before resizing
 	// to ensure optional fields are also resized
@@ -280,7 +280,7 @@ bool GSplatImporter::ImportPly(const UGSplatImportData& ImportData, happly::PLYD
 	bool bCompressedPBR = false;
 	std::vector<float> metallic_float, roughness_float;
 	std::vector<uint8_t> metallic_uchar, roughness_uchar;
-	if (Splats.bHasMetallicRoughness)
+	if (ImportData.bHasMetallicRoughness)
 	{
 		std::string metallicProperty = vertices.hasProperty("metallic") ? "metallic" : "metallicFactor";
 		std::string roughnessProperty = vertices.hasProperty("roughness") ? "roughness" : "roughnessFactor";
@@ -404,7 +404,7 @@ bool GSplatImporter::ImportPly(const UGSplatImportData& ImportData, happly::PLYD
 			normals[i].Normalize();
 		}
 
-		if (Splats.bHasMetallicRoughness)
+		if (ImportData.bHasMetallicRoughness)
 		{
 			if (bCompressedPBR)
 			{
@@ -416,6 +416,11 @@ bool GSplatImporter::ImportPly(const UGSplatImportData& ImportData, happly::PLYD
 				metallicRoughness[i].X = metallic_float[i];
 				metallicRoughness[i].Y = roughness_float[i];
 			}
+		}
+		else if (ImportData.bPopulateMRWithDefault)
+		{
+			metallicRoughness[i].X = ImportData.MetallicDefaultValue;
+			metallicRoughness[i].Y = ImportData.RoughnessDefaultValue;
 		}
 	}
 

@@ -9,6 +9,11 @@ class FGaussianSplatResource;
 class FGaussianSplatResourceWrapper;
 class FGSViewExtension;
 
+BEGIN_UNIFORM_BUFFER_STRUCT(FGaussianSplatPrimitiveShaderResources, )
+	SHADER_PARAMETER_SRV(Buffer<uint>, SplatIndexBuffer)
+	SHADER_PARAMETER_SRV(Buffer<uint>, SplatIndexCountBuffer)
+END_UNIFORM_BUFFER_STRUCT()
+
 
 class FGaussianSplatSceneProxy : public FPrimitiveSceneProxy
 {
@@ -19,10 +24,6 @@ public:
 	//~ Begin FPrimitiveSceneProxy Interface
 	virtual void CreateRenderThreadResources(FRHICommandListBase& RHICmdList) override;
 	virtual void DestroyRenderThreadResources() override;
-
-#if WITH_EDITOR
-	virtual HHitProxy* CreateHitProxies(UPrimitiveComponent* Component, TArray<TRefCountPtr<HHitProxy>>& OutHitProxies) override;
-#endif
 
 	virtual SIZE_T GetTypeHash() const override;
 	virtual uint32 GetMemoryFootprint() const override;
@@ -37,26 +38,46 @@ public:
 
 	FGaussianSplatResource* GetResource_RenderThread() const;
 
+	FRHIShaderResourceView* GetIndexBufferSRV() const;
+	FRHIUnorderedAccessView* GetIndexBufferUAV() const;
+
+	FRHIBuffer* GetIndexCountBuffer() const;
+	FRHIShaderResourceView* GetIndexCountBufferSRV() const;
+	FRHIUnorderedAccessView* GetIndexCountBufferUAV() const;
+
+	bool RequiresNewCullingPass() const;
+	void MarkIndexBufferUpdated();
+
 	bool SupportsRelighting() const;
 
 	inline float GetScaleMultiplier() const { return ScaleMultiplier; }
 	inline int32 GetClippingVolumeMask() const { return ClippingVolumeMask; }
 
 private:
+
+	void CreateIndexBufferResources(FRHICommandListBase& RHICmdList);
+
+private:
 	// GPU Resources for the asset pointed to by the component
 	// It is NOT safe to dereference this pointer on the game thread
 	TSharedPtr<FGaussianSplatResourceWrapper> GaussianSplatResource_RenderThread;
 
-	TWeakPtr<FGSViewExtension> ViewExtension;
+	FBufferRHIRef IndexBuffer = nullptr;
+	FShaderResourceViewRHIRef IndexBufferSRV = nullptr;
+	FUnorderedAccessViewRHIRef IndexBufferUAV = nullptr;
 
-#if WITH_EDITOR
-	// Cached hit proxy created in CreateHitProxies, used for editor viewport click selection.
-	HHitProxy* SelectionHitProxy = nullptr;
-#endif
+	FBufferRHIRef IndexCountBuffer = nullptr;
+	FShaderResourceViewRHIRef IndexCountBufferSRV = nullptr;
+	FUnorderedAccessViewRHIRef IndexCountBufferUAV = nullptr;
+
+	bool bRequiresIndexBufferUpdate = true;
+
+	TWeakPtr<FGSViewExtension> ViewExtension;
 
 	// Per-instance properties
 	float ScaleMultiplier = 1.0f;
 	int32 ClippingVolumeMask = 0;
+	bool bDrawVFInMainPass = false;
 
 	//Proxy vertex factory
 	FGaussianSplatVertexFactory VertexFactory;
