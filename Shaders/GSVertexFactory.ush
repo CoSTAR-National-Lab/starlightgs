@@ -3,11 +3,11 @@
 #include "/Engine/Private/Quaternion.ush"
 #include "/Engine/Generated/GeneratedUniformBuffers.ush"
 
-#if VIRTUAL_SM_ENABLED
+#if SHADOW_DEPTH_SHADER
 #include "/Engine/Private/Nanite/NaniteDataDecode.ush"
 #include "/Engine/Private/SceneData.ush"
 #include "/Engine/Private/VirtualShadowMaps/VirtualShadowMapPageAccessCommon.ush"
-#endif // VIRTUAL_SM_ENABLED
+#endif // SHADOW_DEPTH_SHADER
 
 
 //general input
@@ -153,16 +153,19 @@ ComputeSplatParameters(
 	in uint SplatIndex,
 	in float2 LocalPosition,
 
-
     out float4 OutWorldPosition,
-	//out float2 OutSvPosition,
-    //out float2 OutMeanScreenPosition,
 	out float3 OutConic,
     out float3 OutWorldNormal
 )
 {
-    float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex]);
-    float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(GSResources.Orientations[SplatIndex]));
+    //float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex]);
+    //float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(GSResources.Orientations[SplatIndex]));
+
+    //float3 MeanPosition = GSResources.Positions[SplatIndex];
+    float3 MeanPosition = float3(0, 0, 0);
+
+    float3x3 ScaleMatrix = VecToScaleMatrix(float3(0.01,0.02,0.01));
+    float3x3 RotationMatrix = mul(QuatToMatrix(QuatIdentity()), DFToFloat3x3(Primitive.LocalToWorld));
 
 	// Calculate covariance matrix
     float3x3 T = mul(RotationMatrix, ScaleMatrix);
@@ -170,8 +173,8 @@ ComputeSplatParameters(
 
     if (IsOrthoProjection(ViewToClip))
     {
-        float3x3 R = (float3x3) ViewToTranslatedWorld;
-        float3x3 covView = mul(R, mul(Covariance3D, transpose(R)));
+        float3x3 V = (float3x3) ViewToTranslatedWorld;
+        float3x3 covView = mul(V, mul(Covariance3D, transpose(V)));
 
         float X = covView[0][0];
         float Y = covView[1][1];
@@ -212,85 +215,54 @@ ComputeSplatParameters(
         worldOffset *= 100.f;
 
         float3x3 CamM = (float3x3) ViewToTranslatedWorld;
-
-
         //View Space is Local Space
-        worldOffset.xyz = mul(worldOffset.xyz,CamM);
+        //worldOffset.xyz = mul(worldOffset.xyz,CamM);
 
-        //worldOffset = DFTransformLocalToTranslatedWorld(worldOffset.xyz, Primitive.LocalToWorld, ResolvedView.PreViewTranslation);
+        //float4 TranslatedWorldPosition = TransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld);
 
-        //Apply just the PreViewTranslation but leave the view rotation intact.
-        //#if UE_DF_NO_FAST_MATH
-        //	float3 TranslatedWorldPositionOrigin = DFAddDemote(DFGetOrigin(LocalToWorld), PreViewTranslation);
-        //#else
-        //  float3 TranslatedWorldPositionOrigin = DFFastLocalSubtractDemote(Primitive.LocalToWorld.PostTranslation, DFNegate(ResolvedView.PreViewTranslation)) + Primitive.LocalToWorld.M[3].xyz;
-        //#endif
-	
-        //OutSvPosition = float2(0, 0);
-        //OutMeanScreenPosition = float2(0, 0);
-
-        float4 TranslatedWorldPosition = TransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld);
-
-        OutWorldPosition = TranslatedWorldPosition + float4(worldOffset.xyz, 1);
-
-        //float4 TWP = DFTransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld, PreViewTranslation);
-
-        //TWP.w *= 100.f; //essentailly scales the whole thing down by a 100;
-
-        //OutWorldPosition = worldOffset;
-
-        //float4 MeanSP = mul(TWP, TranslatedWorldToClip);
-        //MeanSP.xyz /= MeanSP.w;
-        //OutMeanScreenPosition.xy = (float2(MeanSP.x, -MeanSP.y) + 1) * 0.5f * float2(2.f/ViewToClip[0][0], 2.f/ViewToClip[1][1]); // ViewSize Ortho matrix X and Y are 2/Width and 2/Height respectively
-
-        //float4 VertSP = mul(TWP + float4(worldOffset.xyz,1), TranslatedWorldToClip);
-        //VertSP.xyz /= VertSP.w;
-        //OutSvPosition.xy = (float2(VertSP.x, -VertSP.y) + 1) * 0.5* float2(2.f / ViewToClip[0][0], 2.f / ViewToClip[1][1]);
+        OutWorldPosition = float4(worldOffset.xyz, 1);
 
         OutConic = Conic;
         OutWorldNormal = RotateLocalToWorld(GSResources.Normals[SplatIndex], Primitive.LocalToWorld, Primitive.InvNonUniformScale);
-
-        return; 
     }
 	else
     {
           float3x3 covView;
           float SplatZScale = 1.f;
 
-		  float3 TranslatedWorldPositionNaniteView = TransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld).xyz;
+		  float3 TranslatedWorldPositionNaniteView = TransformLocalToTranslatedWorld(MeanPosition, Primitive.LocalToWorld).xyz;
           TranslatedWorldPositionNaniteView += DFFastSubtractDemote(PreViewTranslation, ResolvedView.PreViewTranslation);
 
-          if (!IsOrthoProjection(ViewToClip))
-          {
-              float4 ViewPosition = mul(float4(TranslatedWorldPositionNaniteView, 1), TranslatedWorldToView);
+       
+		  float4 ViewPosition = mul(float4(TranslatedWorldPositionNaniteView, 1), TranslatedWorldToView);
 
-          	  ViewPosition.xyz *= 0.01f;
+       	  ViewPosition.xyz *= 0.01f;
 
-              SplatZScale = ViewPosition.z / (ViewPosition.w);
-          	  SplatZScale = SplatZScale;// * 0.5;
+		  SplatZScale = ViewPosition.z / (ViewPosition.w);
+       	  SplatZScale = SplatZScale;// * 0.5;
 
-          	  // Calculate Jacobian matrix based off of projection matrix
-          	  // // Perspective jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
-              float FocalZ = ViewSizeAndInvSize.y / (2.f * TanHalfFOV.y);
-              float LimX = 1.3f * TanHalfFOV.x;
-              float LimY = 1.3f * TanHalfFOV.y;
+       	  // Calculate Jacobian matrix based off of projection matrix
+       	  // // Perspective jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
+          float FocalZ = ViewSizeAndInvSize.y / (2.f * TanHalfFOV.y);
+          float LimX = 1.3f * TanHalfFOV.x;
+          float LimY = 1.3f * TanHalfFOV.y;
 
-              float TxTz = ViewPosition.x / ViewPosition.z;
-              float TyTz = ViewPosition.y / ViewPosition.z;
+          float TxTz = ViewPosition.x / ViewPosition.z;
+          float TyTz = ViewPosition.y / ViewPosition.z;
 
-			  //// Clamped versions of TxTz and TyTz 
-              float Tx = min(LimX, max(-LimX, TxTz)) * ViewPosition.z;
-              float TY = min(LimY, max(-LimY, TyTz)) * ViewPosition.z;
+		  //// Clamped versions of TxTz and TyTz 
+		  float Tx = min(LimX, max(-LimX, TxTz)) * ViewPosition.z;
+		  float TY = min(LimY, max(-LimY, TyTz)) * ViewPosition.z;
 
-              float3x3 J = float3x3(
-			  FocalZ / ViewPosition.z, 0.0f, -(FocalZ * Tx) / (ViewPosition.z * ViewPosition.z),
-			  0.0f, FocalZ / ViewPosition.z, -(FocalZ * TY) / (ViewPosition.z * ViewPosition.z),
-			  0.0f, 0.0f, 0.0f
-			  );
+          float3x3 J = float3x3(
+	      FocalZ / ViewPosition.z, 0.0f, -(FocalZ * Tx) / (ViewPosition.z * ViewPosition.z),
+	      0.0f, FocalZ / ViewPosition.z, -(FocalZ * TY) / (ViewPosition.z * ViewPosition.z),
+	      0.0f, 0.0f, 0.0f
+	      );
 
-              float3x3 JW = mul(J, transpose((float3x3) ViewToTranslatedWorld));
-              covView = mul(JW, mul(transpose(Covariance3D), transpose(JW)));
-          }
+          float3x3 JW = mul(J, transpose((float3x3) TranslatedWorldToView));
+          covView = mul(JW, mul(transpose(Covariance3D), transpose(JW)));
+          
 			
 		  {
               float X = covView[0][0] + 0.3f;
@@ -366,19 +338,17 @@ ComputeSplatParameters(
             
             OutConic = Conic;
             OutWorldNormal = RotateLocalToWorld(GSResources.Normals[SplatIndex], Primitive.LocalToWorld, Primitive.InvNonUniformScale);
-            
-            return;
 		}
     }
 
 	
-    {
-        // Set this to be an invalid primitive so it is culled (if every vertex is positioned at 0 then it will effectively be culled)
-		OutWorldPosition = 0.0f;
-		//OutMeanScreenPosition = 0.0f;
-		OutConic = 0.0f;
-		OutWorldNormal = 0.0f;
-	}
+ //   {
+ //       // Set this to be an invalid primitive so it is culled (if every vertex is positioned at 0 then it will effectively be culled)
+	//	OutWorldPosition = 0.0f;
+	//	//OutMeanScreenPosition = 0.0f;
+	//	OutConic = 0.0f;
+	//	OutWorldNormal = 0.0f;
+	//}
 }
 
 /** Attributes to interpolate from the vertex shader to the pixel shader. */
@@ -435,7 +405,7 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 
     Intermediates.Opacity = GSResources.SHAndOpacities[SplatIndex].w;
 
-#if VIRTUAL_SM_ENABLED
+#if SHADOW_DEPTH_SHADER
 	uint PackedPageInfo = InstanceCulling_PageInfoBuffer[Intermediates.SceneData.InstanceIdLoadIndex];
 	FPageInfo PageInfo = UnpackPageInfo(PackedPageInfo);
 	FNaniteView NaniteView = UnpackNaniteView(ShadowDepthPass_PackedNaniteViews[PageInfo.ViewId]);
@@ -443,7 +413,7 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 
     ComputeSplatParameters(
 		// View parameters
-#if VIRTUAL_SM_ENABLED
+#if SHADOW_DEPTH_SHADER
 		NaniteView.TranslatedWorldToView,
 		NaniteView.ViewToClip,
 		//NaniteView.ViewSizeAndInvSize ,

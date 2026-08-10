@@ -2,6 +2,7 @@
 
 #include "ShaderParameterStruct.h"
 #include "RenderGraph.h"
+#include "ShaderCompilerCore.h"
 
 
 /*-----------------------------------------------------
