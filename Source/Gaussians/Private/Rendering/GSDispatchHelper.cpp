@@ -17,7 +17,7 @@ class FGSSetupIndirectArgsCS : public FGlobalShader
 	END_SHADER_PARAMETER_STRUCT()
 };
 
-IMPLEMENT_GLOBAL_SHADER(FGSSetupIndirectArgsCS, "/Plugin/Gaussians/GSDispatchHelper.usf", "GSSetupIndirectArgsCS", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FGSSetupIndirectArgsCS, "/Plugin/StarLightGS/GSDispatchHelper.usf", "GSSetupIndirectArgsCS", SF_Compute);
 
 
 void Gaussians::AddSetupDispatchIndirectArgsPass(

@@ -50,9 +50,9 @@ namespace Gaussians
 
 void FGaussiansModule::StartupModule()
 {
-	FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("Gaussians"))->GetBaseDir(), TEXT("Shaders"));
-	AddShaderSourceDirectoryMapping(TEXT("/Plugin/Gaussians"), PluginShaderDir);
-	AddShaderSourceSharedVirtualDirectory(TEXT("/Plugin/Gaussians/Shared/"));
+	FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("StarLightGS"))->GetBaseDir(), TEXT("Shaders"));
+	AddShaderSourceDirectoryMapping(TEXT("/Plugin/StarLightGS"), PluginShaderDir);
+	AddShaderSourceSharedVirtualDirectory(TEXT("/Plugin/StarLightGS/Shared/"));
 }
 
 void FGaussiansModule::ShutdownModule()

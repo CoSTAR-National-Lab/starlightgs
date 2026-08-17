@@ -87,7 +87,7 @@ class FGSPrepassCS : public FGlobalShader
 	static uint32 GetThreadGroupSize1D() { return 128; }
 };
 
-IMPLEMENT_GLOBAL_SHADER(FGSPrepassCS, "/Plugin/Gaussians/GSCompute.usf", "GSPrepass", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FGSPrepassCS, "/Plugin/StarLightGS/GSCompute.usf", "GSPrepass", SF_Compute);
 
 
 class FSplattingPassVS : public FGlobalShader
@@ -117,7 +117,7 @@ class FSplattingPassVS : public FGlobalShader
 	SHADER_USE_PARAMETER_STRUCT(FSplattingPassVS, FGlobalShader);
 };
 
-IMPLEMENT_GLOBAL_SHADER(FSplattingPassVS, "/Plugin/Gaussians/GSCompute.usf", "GSSplatting_VS", SF_Vertex);
+IMPLEMENT_GLOBAL_SHADER(FSplattingPassVS, "/Plugin/StarLightGS/GSCompute.usf", "GSSplatting_VS", SF_Vertex);
 
 class FSplattingPassPS : public FGlobalShader
 {
@@ -133,7 +133,7 @@ class FSplattingPassPS : public FGlobalShader
 	SHADER_USE_PARAMETER_STRUCT(FSplattingPassPS, FGlobalShader);
 };
 
-IMPLEMENT_GLOBAL_SHADER(FSplattingPassPS, "/Plugin/Gaussians/GSCompute.usf", "GSSplatting_PS", SF_Pixel);
+IMPLEMENT_GLOBAL_SHADER(FSplattingPassPS, "/Plugin/StarLightGS/GSCompute.usf", "GSSplatting_PS", SF_Pixel);
 
 
 BEGIN_SHADER_PARAMETER_STRUCT(FSplattingPassPipelineParameters, )

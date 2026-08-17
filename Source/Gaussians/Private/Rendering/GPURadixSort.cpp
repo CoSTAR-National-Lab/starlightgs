@@ -67,7 +67,7 @@ public:
 		SetRadixSortShaderCompilerEnvironment(OutEnvironment);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FGPURadixSortPopulateParametersCS, "/Plugin/Gaussians/RadixSort.usf", "RadixSortPopulateParametersCS", SF_Compute)
+IMPLEMENT_GLOBAL_SHADER(FGPURadixSortPopulateParametersCS, "/Plugin/StarLightGS/RadixSort.usf", "RadixSortPopulateParametersCS", SF_Compute)
 
 class FGPURadixSortClearOffsetsCS : public FGlobalShader
 {
@@ -86,7 +86,7 @@ public:
 		SetRadixSortShaderCompilerEnvironment(OutEnvironment);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FGPURadixSortClearOffsetsCS, "/Plugin/Gaussians/RadixSort.usf", "RadixSortClearOffsetsCS", SF_Compute)
+IMPLEMENT_GLOBAL_SHADER(FGPURadixSortClearOffsetsCS, "/Plugin/StarLightGS/RadixSort.usf", "RadixSortClearOffsetsCS", SF_Compute)
 
 class FGPURadixSortUpsweepCS : public FGlobalShader
 {
@@ -114,7 +114,7 @@ public:
 		SetRadixSortShaderCompilerEnvironment(OutEnvironment);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FGPURadixSortUpsweepCS, "/Plugin/Gaussians/RadixSort.usf", "RadixSortUpsweepCS", SF_Compute)
+IMPLEMENT_GLOBAL_SHADER(FGPURadixSortUpsweepCS, "/Plugin/StarLightGS/RadixSort.usf", "RadixSortUpsweepCS", SF_Compute)
 
 class FGPURadixSortSpineCS : public FGlobalShader
 {
@@ -134,7 +134,7 @@ public:
 		SetRadixSortShaderCompilerEnvironment(OutEnvironment);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FGPURadixSortSpineCS, "/Plugin/Gaussians/RadixSort.usf", "RadixSortSpineCS", SF_Compute)
+IMPLEMENT_GLOBAL_SHADER(FGPURadixSortSpineCS, "/Plugin/StarLightGS/RadixSort.usf", "RadixSortSpineCS", SF_Compute)
 
 class FGPURadixSortDownsweepCS : public FGlobalShader
 {
@@ -168,7 +168,7 @@ public:
 		SetRadixSortShaderCompilerEnvironment(OutEnvironment);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FGPURadixSortDownsweepCS, "/Plugin/Gaussians/RadixSort.usf", "RadixSortDownsweepCS", SF_Compute)
+IMPLEMENT_GLOBAL_SHADER(FGPURadixSortDownsweepCS, "/Plugin/StarLightGS/RadixSort.usf", "RadixSortDownsweepCS", SF_Compute)
 
 
 // --- Public interface --- //
