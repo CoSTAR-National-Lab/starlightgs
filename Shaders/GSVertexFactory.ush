@@ -158,14 +158,14 @@ ComputeSplatParameters(
     out float3 OutWorldNormal
 )
 {
-    //float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex]);
-    //float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(GSResources.Orientations[SplatIndex]));
+    float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex]);
+    float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(GSResources.Orientations[SplatIndex]));
 
-    //float3 MeanPosition = GSResources.Positions[SplatIndex];
-    float3 MeanPosition = float3(0, 0, 0);
+    float3 MeanPosition = GSResources.Positions[SplatIndex];
+    //float3 MeanPosition = float3(0, 0, 0);
 
-    float3x3 ScaleMatrix = VecToScaleMatrix(float3(0.01,0.02,0.01));
-    float3x3 RotationMatrix = mul(QuatToMatrix(QuatIdentity()), DFToFloat3x3(Primitive.LocalToWorld));
+    //float3x3 ScaleMatrix = VecToScaleMatrix(float3(0.01,0.02,0.01));
+    //float3x3 RotationMatrix = mul(QuatToMatrix(QuatIdentity()), DFToFloat3x3(Primitive.LocalToWorld));
 
 	// Calculate covariance matrix
     float3x3 T = mul(RotationMatrix, ScaleMatrix);

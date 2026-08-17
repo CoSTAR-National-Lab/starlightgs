@@ -117,8 +117,8 @@ FPrimitiveViewRelevance FGaussianSplatSceneProxy::GetViewRelevance(const FSceneV
 	Result.bDrawRelevance =
 		IsShown(View)
 		& !View->bIsGameView
-		//& !View->Family->EngineShowFlags.Editor
-		//& !View->Family->EngineShowFlags.Game
+		& !View->Family->EngineShowFlags.Editor
+		& !View->Family->EngineShowFlags.Game
 #ifdef WITH_EDITOR
 		| View->Family->EngineShowFlags.HitProxies
 #endif
@@ -184,7 +184,7 @@ void FGaussianSplatSceneProxy::GetDynamicMeshElements(
 
 				// TODO: Use indirect arguments to draw shadow (draw indirect args are already populated and stored in IndexCountBuffer)
 				// One quad per splat -> 2 triangles per quad
-				MeshElement.NumPrimitives = 2; //* GaussianSplatResource_RenderThread->GetResource()->GetSplatCount();
+				MeshElement.NumPrimitives = 2 * GaussianSplatResource_RenderThread->GetResource()->GetSplatCount();
 				MeshElement.NumInstances = 1;
 				MeshElement.MinVertexIndex = 0;
 				MeshElement.MaxVertexIndex = 0;
