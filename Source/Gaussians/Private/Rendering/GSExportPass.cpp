@@ -42,7 +42,7 @@ class FGSExportPassCS : public FGlobalShader
 	static uint32 GetThreadGroupSize1D() { return 128; }
 };
 
-IMPLEMENT_GLOBAL_SHADER(FGSExportPassCS, "/Plugin/Gaussians/GSExport.usf", "GSExportPassCS", SF_Compute)
+IMPLEMENT_GLOBAL_SHADER(FGSExportPassCS, "/Plugin/StarLightGS/GSExport.usf", "GSExportPassCS", SF_Compute)
 
 
 BEGIN_SHADER_PARAMETER_STRUCT(FGSExportReadbackPassParameters, )

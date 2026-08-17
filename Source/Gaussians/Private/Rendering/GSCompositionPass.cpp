@@ -48,7 +48,7 @@ class FGSCompositionPS : public FGlobalShader
 	}
 };
 
-IMPLEMENT_GLOBAL_SHADER(FGSCompositionPS, "/Plugin/Gaussians/GSplatComposition.usf", "GSplatCompositionPS", SF_Pixel)
+IMPLEMENT_GLOBAL_SHADER(FGSCompositionPS, "/Plugin/StarLightGS/GSplatComposition.usf", "GSplatCompositionPS", SF_Pixel)
 
 
 void FGSViewExtension::GSCompositionPass(

@@ -14,17 +14,17 @@
       "LoadingPhase": "Default"
     }
   ],
-  "FriendlyName": "Gaussians",
+  "FriendlyName": "StarLightGS",
   "Description": "",
   "Category": "Other",
-  "CreatedBy": "",
-  "CreatedByURL": "",
+  "CreatedBy": "CoSTAR National Lab",
+  "CreatedByURL": "https://www.costarnetwork.co.uk/",
   "DocsURL": "",
   "MarketplaceURL": "",
   "SupportURL": "",
   "CanContainContent": "true",
   "Installed": false,
-  "IsBetaVersion": false,
+  "IsBetaVersion": true,
   "Plugins": [
     {
       "Name": "Niagara",

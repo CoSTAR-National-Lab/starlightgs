@@ -43,7 +43,7 @@ class FGSplatCullingCS : public FGlobalShader
 	static uint32 GetThreadGroupSize1D() { return 128; }
 };
 
-IMPLEMENT_GLOBAL_SHADER(FGSplatCullingCS, "/Plugin/Gaussians/GSplatCulling.usf", "GSplatCullingCS", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FGSplatCullingCS, "/Plugin/StarLightGS/GSplatCulling.usf", "GSplatCullingCS", SF_Compute);
 
 
 int32 ConvertClippingMode(EGaussianSplatClippingVolumeMode Mode)

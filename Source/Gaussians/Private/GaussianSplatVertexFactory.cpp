@@ -7,7 +7,7 @@
 #include "MeshMaterialShader.h"
 #include "MeshDrawShaderBindings.h"
 
-IMPLEMENT_VERTEX_FACTORY_TYPE(FGaussianSplatVertexFactory, "/Plugin/Gaussians/GSVertexFactory.ush",
+IMPLEMENT_VERTEX_FACTORY_TYPE(FGaussianSplatVertexFactory, "/Plugin/StarLightGS/GSVertexFactory.ush",
 	  EVertexFactoryFlags::UsedWithMaterials
 	| EVertexFactoryFlags::SupportsDynamicLighting
 	| EVertexFactoryFlags::SupportsStaticLighting

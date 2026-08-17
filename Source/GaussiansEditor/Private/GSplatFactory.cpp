@@ -66,6 +66,10 @@ static bool ShowGSplatImportWindow(const FString& Filename, UGSplatImportData* I
 	ImportData->bImportHighOrderSH = GSplatOptionWindow->ShouldImportHighOrderSH();
 	ImportData->bImportMetallicRoughness = GSplatOptionWindow->ShouldImportMetallicRoughness();
 
+	ImportData->bPopulateMRWithDefault = GSplatOptionWindow->ShouldPopulateMetallicRoughnessWithDefault();
+	ImportData->MetallicDefaultValue = GSplatOptionWindow->GetDefaultMetallicValue();
+	ImportData->RoughnessDefaultValue = GSplatOptionWindow->GetDefaultRoughnessValue();
+
 	ImportData->ScaleFactor = GSplatOptionWindow->GetScaleFactor();
 
 	GSplatOptionWindow->GetImportSwizzle(ImportData->Swizzle);

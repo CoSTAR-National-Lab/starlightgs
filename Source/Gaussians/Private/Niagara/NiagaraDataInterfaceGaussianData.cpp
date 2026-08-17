@@ -17,7 +17,7 @@
 
 
 #define LOCTEXT_NAMESPACE "NiagaraDataInterfaceGaussianData"
-static const TCHAR* GSplatDITemplateShaderFile = TEXT("/Plugin/Gaussians/GSplatNiagaraDataInterface.ush");
+static const TCHAR* GSplatDITemplateShaderFile = TEXT("/Plugin/StarLightGS/GSplatNiagaraDataInterface.ush");
 
 
 //------------------------------------------------------------------------------------------------------------
