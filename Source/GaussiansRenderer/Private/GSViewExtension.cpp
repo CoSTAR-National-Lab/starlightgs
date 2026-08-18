@@ -1,14 +1,17 @@
 #include "GSViewExtension.h"
 
-#include "Gaussians.h"
-#include "GaussianSplatSceneProxy.h"
+#include "GaussiansRenderer.h"
+#include "GaussianSplatInterface.h"
+
 #include "Rendering/GSGPUStats.h"
+#include "Rendering/GSplatGBuffer.h"
+#include "Rendering/GSExportPass.h"
 
 #include "RenderGraphUtils.h"
 #include "PostProcess/PostProcessInputs.h"
 #include "ScenePrivate.h"
 
-#include "GSWorldSubsystem.h"
+#include "Subsystems/WorldSubsystem.h"
 
 DEFINE_STAT(STAT_SplatsSubmittedLit)
 DEFINE_STAT(STAT_SplatsSubmittedUnlit)
@@ -33,32 +36,23 @@ static TAutoConsoleVariable<bool> CVarGaussiansForceCullEveryFrame(
 );
 
 
-FGSViewExtension::FGSViewExtension(const FAutoRegister& AutoRegister, UGSWorldSubsystem* Owner)
+FGSViewExtension::FGSViewExtension(const FAutoRegister& AutoRegister, UWorldSubsystem* Owner, IGSClippingVolumeContainerInterface* InClippingVolumeContainer)
 	: FSceneViewExtensionBase(AutoRegister)
 	, OwningSubsystem(Owner)
+	, ClippingVolumeContainer(InClippingVolumeContainer)
 {
+	check(OwningSubsystem && ClippingVolumeContainer);
+
 	GPUStats = MakePimpl<FGSGPUStats>();
 }
 
 void FGSViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 {
 	// Build collection of clipping volumes and send to render thread
-	const TArray<const AGaussianSplatClippingVolume*>& ClippingVolumes = OwningSubsystem->GetClippingVolumes();
+	TArray<FGSClippingVolumeProxy> ClippingVolumeProxies = ClippingVolumeContainer->BuildClippingVolumeProxies();
+	Algo::Sort(ClippingVolumeProxies, [](const auto& VolA, const auto& VolB){ return VolA.Priority < VolB.Priority; });
 
-	TArray<FGSClippingVolumeParameters> TempClippingVolumeParameters;
-	TempClippingVolumeParameters.Reserve(ClippingVolumes.Num());
-
-	for (const AGaussianSplatClippingVolume* Volume : ClippingVolumes)
-	{
-		if (!Volume->bEnabled)
-			continue;
-
-		TempClippingVolumeParameters.Emplace(Volume);
-	}
-
-	Algo::Sort(TempClippingVolumeParameters, [](const auto& VolA, const auto& VolB){ return VolA.Priority < VolB.Priority; });
-
-	ENQUEUE_RENDER_COMMAND(CopyGaussianSplatClippingVolumes)([this, TempVolumes = MoveTemp(TempClippingVolumeParameters)](FRHICommandList& RHICommandList)
+	ENQUEUE_RENDER_COMMAND(CopyGaussianSplatClippingVolumes)([this, TempVolumes = MoveTemp(ClippingVolumeProxies)](FRHICommandList& RHICommandList)
 	{
 		ClippingVolumeParameters = TempVolumes;
 	});
@@ -88,7 +82,7 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 	// Run culling for all splats that need it
 	{
 		bool bForceEnable = CVarGaussiansForceCullEveryFrame.GetValueOnRenderThread();
-		TSet<FGaussianSplatSceneProxy*> AllProxies = RelightableProxies.Union(NonRelightableProxies);
+		TSet<IGaussianSplatInterface*> AllProxies = RelightableProxies.Union(NonRelightableProxies);
 
 		bool bRequiresCullingPass = bForceEnable;
 		if (!bForceEnable)
@@ -152,7 +146,7 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 		if (!Gaussians::IsRelightingEnabled_RenderThread())
 		{
 			// If relighting is disabled, then render all relightable gaussians with non-relightable gaussians
-			TSet<FGaussianSplatSceneProxy*> AllProxies = RelightableProxies.Union(NonRelightableProxies);
+			TSet<IGaussianSplatInterface*> AllProxies = RelightableProxies.Union(NonRelightableProxies);
 
 			GaussianSplattingPass(GraphBuilder, InView, RenderTargets, AllProxies, GPUStats.Get());
 		}
@@ -178,7 +172,7 @@ bool FGSViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionConte
 		!CVarGaussiansDisableViewExtension.GetValueOnGameThread();
 }
 
-void FGSViewExtension::RegisterProxy(FGaussianSplatSceneProxy* Proxy)
+void FGSViewExtension::RegisterProxy(IGaussianSplatInterface* Proxy)
 {
 	check(IsInRenderingThread());
 	if (Proxy->SupportsRelighting())
@@ -193,7 +187,7 @@ void FGSViewExtension::RegisterProxy(FGaussianSplatSceneProxy* Proxy)
 	}
 }
 
-void FGSViewExtension::UnregisterProxy(FGaussianSplatSceneProxy* Proxy)
+void FGSViewExtension::UnregisterProxy(IGaussianSplatInterface* Proxy)
 {
 	check(IsInRenderingThread());
 	if (Proxy->SupportsRelighting())
@@ -206,4 +200,66 @@ void FGSViewExtension::UnregisterProxy(FGaussianSplatSceneProxy* Proxy)
 		check(NonRelightableProxies.Contains(Proxy));
 		NonRelightableProxies.Remove(Proxy);
 	}
+}
+
+
+void FGSViewExtension::CopySplatGPUToCPU(
+	IGaussianSplatInterface* Proxy,
+	TArray<FVector3f>& Positions, 
+	TArray<FVector3f>& Scales,
+	TArray<FQuat4f>& Orientations, 
+	TArray<FVector4f>& SHAndOpacities, 
+	TArray<FVector3f>& Normals,
+	TArray<FVector2f>& MetallicRoughness)
+{
+	check(IsInGameThread());
+
+	ENQUEUE_RENDER_COMMAND(GaussiansExportClippedSplat)([&Positions, &Scales, &Orientations, &SHAndOpacities, &Normals, &MetallicRoughness, Proxy]
+	(FRHICommandListImmediate& RHICmdList)
+		{
+			bool bRelighting = Proxy->SupportsRelighting();
+
+			FRDGBuilder GraphBuilder(RHICmdList);
+			FGaussianSplatReadbackData ReadbackData;
+
+			Gaussians::ExportSplatData(
+				GraphBuilder,
+				Proxy,
+				ReadbackData
+			);
+
+			GraphBuilder.Execute();
+
+			// Make sure work is submitted to the GPU immediately so that we can wait on it
+			RHICmdList.ImmediateFlush(EImmediateFlushType::FlushRHIThread, ERHISubmitFlags::SubmitToGPU | ERHISubmitFlags::FlushRHIThread);
+
+			// Wait for work to complete on the GPU
+			ReadbackData.Fence->Wait(RHICmdList, RHICmdList.GetGPUMask());
+
+			// Now take the data from the buffers to populate CPU arrays that will form the asset
+			// First read the splat count to know how big to make the arrays
+			uint32 SplatCount = *static_cast<uint32*>(RHILockStagingBuffer(ReadbackData.SplatCount, 0, sizeof(uint32)));
+			RHIUnlockStagingBuffer(ReadbackData.SplatCount);
+
+			auto DoCopyIntoBuffer = [&]<typename T>(FRHIStagingBuffer * StagingBuffer, TArray<T>&DestArray)
+			{
+				DestArray.SetNumUninitialized(SplatCount);
+
+				void* DataPtr = RHILockStagingBuffer(StagingBuffer, 0, SplatCount * sizeof(T));
+				FMemory::Memcpy(DestArray.GetData(), DataPtr, SplatCount * sizeof(T));
+				RHIUnlockStagingBuffer(StagingBuffer);
+			};
+
+			DoCopyIntoBuffer(ReadbackData.Positions, Positions);
+			DoCopyIntoBuffer(ReadbackData.Scales, Scales);
+			DoCopyIntoBuffer(ReadbackData.Orientations, Orientations);
+			DoCopyIntoBuffer(ReadbackData.SHAndOpacities, SHAndOpacities);
+			if (bRelighting)
+			{
+				DoCopyIntoBuffer(ReadbackData.Normals, Normals);
+				DoCopyIntoBuffer(ReadbackData.MetallicRoughness, MetallicRoughness);
+			}
+		});
+
+	FlushRenderingCommands();
 }

@@ -4,7 +4,7 @@
 
 
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FGaussianSplatShaderResources, "GSResources")
-
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FGaussianSplatPrimitiveShaderResources, "GSPrimitiveResources")
 
 FGaussianSplatResource::FGaussianSplatResource(FGaussianSplatData InSplatData)
 	: SplatData(MoveTemp(InSplatData))

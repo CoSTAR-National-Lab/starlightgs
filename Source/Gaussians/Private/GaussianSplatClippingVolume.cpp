@@ -6,6 +6,8 @@
 
 AGaussianSplatClippingVolume::AGaussianSplatClippingVolume()
 {
+	MaskTags.AddTag(FGameplayTag::RequestGameplayTag("StarLightGS.CullingVolumes.Default", false));
+
 	bColored = true;
 	BrushColor.R = 0;
 	BrushColor.G = 128;
@@ -42,11 +44,10 @@ void AGaussianSplatClippingVolume::BeginDestroy()
 	}
 }
 
-
-FGSClippingVolumeParameters::FGSClippingVolumeParameters(const AGaussianSplatClippingVolume* ClippingVolume)
-	: Mode(ClippingVolume->Mode)
-	, Priority(ClippingVolume->Priority)
-	, Bounds(ClippingVolume->GetBounds().GetBox())
-	, Mask(ClippingVolume->Mask)
+void AGaussianSplatClippingVolume::PopulateClippingVolumeProxy(FGSClippingVolumeProxy& OutProxy) const
 {
+	OutProxy.Mode = Mode;
+	OutProxy.Priority = Priority;
+	OutProxy.Bounds = GetBounds().GetBox();
+	OutProxy.Mask = Mask;
 }

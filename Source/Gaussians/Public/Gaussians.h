@@ -7,17 +7,6 @@
 DECLARE_LOG_CATEGORY_EXTERN(LogGSplats, Log, All)
 
 
-namespace Gaussians
-{
-	// Ability to force-disable all relighting via CVar (mostly for demonstration purposes)
-	bool IsRelightingEnabled();
-	bool IsRelightingEnabled_RenderThread();
-
-	bool IsShadowsEnabled();
-	bool IsShadowsEnabled_RenderThread();
-}
-
-
 class FGaussiansModule : public IModuleInterface
 {
 public:

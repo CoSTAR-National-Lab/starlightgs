@@ -1,7 +1,7 @@
 #include "GSExportPass.h"
 
 #include "GaussianSplatResource.h"
-#include "GaussianSplatSceneProxy.h"
+#include "GaussianSplatInterface.h"
 #include "GSDispatchHelper.h"
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
@@ -57,7 +57,7 @@ END_SHADER_PARAMETER_STRUCT()
 
 void Gaussians::ExportSplatData(
 	FRDGBuilder& GraphBuilder, 
-	const FGaussianSplatSceneProxy* Proxy,
+	const IGaussianSplatInterface* Proxy,
 	FGaussianSplatReadbackData& OutReadbackData
 )
 {

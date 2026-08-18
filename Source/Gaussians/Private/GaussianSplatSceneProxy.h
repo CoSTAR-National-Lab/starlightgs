@@ -1,6 +1,8 @@
 #pragma once
 
+#include "GaussianSplatInterface.h"
 #include "GaussianSplatVertexFactory.h"
+
 #include "PrimitiveSceneProxy.h"
 
 
@@ -9,13 +11,8 @@ class FGaussianSplatResource;
 class FGaussianSplatResourceWrapper;
 class FGSViewExtension;
 
-BEGIN_UNIFORM_BUFFER_STRUCT(FGaussianSplatPrimitiveShaderResources, )
-	SHADER_PARAMETER_SRV(Buffer<uint>, SplatIndexBuffer)
-	SHADER_PARAMETER_SRV(Buffer<uint>, SplatIndexCountBuffer)
-END_UNIFORM_BUFFER_STRUCT()
 
-
-class FGaussianSplatSceneProxy : public FPrimitiveSceneProxy
+class FGaussianSplatSceneProxy : public FPrimitiveSceneProxy, public IGaussianSplatInterface
 {
 public:
 	FGaussianSplatSceneProxy(UGaussianSplatComponent* InComponent);
@@ -36,22 +33,28 @@ public:
 		FMeshElementCollector& Collector) const override;
 	//~ End FPrimitiveSceneProxy Interface
 
-	FGaussianSplatResource* GetResource_RenderThread() const;
+	//~ Begin IGaussianSplatInterface
+	virtual FGaussianSplatResource* GetResource_RenderThread() const override;
+	virtual inline FRHIUniformBuffer* GetProxyUniformBuffer() const override { return GetUniformBuffer(); }
 
-	FRHIShaderResourceView* GetIndexBufferSRV() const;
-	FRHIUnorderedAccessView* GetIndexBufferUAV() const;
+	virtual inline const FBoxSphereBounds& GetSplatBounds() const override { return GetBounds(); };
+	virtual inline bool IsSplatShown(const FSceneView* InView) const override { return IsShown(InView); };
 
-	FRHIBuffer* GetIndexCountBuffer() const;
-	FRHIShaderResourceView* GetIndexCountBufferSRV() const;
-	FRHIUnorderedAccessView* GetIndexCountBufferUAV() const;
+	virtual FRHIShaderResourceView* GetIndexBufferSRV() const override;
+	virtual FRHIUnorderedAccessView* GetIndexBufferUAV() const override;
 
-	bool RequiresNewCullingPass() const;
-	void MarkIndexBufferUpdated();
+	virtual FRHIBuffer* GetIndexCountBuffer() const override;
+	virtual FRHIShaderResourceView* GetIndexCountBufferSRV() const override;
+	virtual FRHIUnorderedAccessView* GetIndexCountBufferUAV() const override;
 
-	bool SupportsRelighting() const;
+	virtual bool RequiresNewCullingPass() const override;
+	virtual void MarkIndexBufferUpdated() override;
 
-	inline float GetScaleMultiplier() const { return ScaleMultiplier; }
-	inline int32 GetClippingVolumeMask() const { return ClippingVolumeMask; }
+	virtual bool SupportsRelighting() const override;
+
+	virtual inline float GetScaleMultiplier() const override { return ScaleMultiplier; }
+	virtual inline int32 GetClippingVolumeMask() const override { return ClippingVolumeMask; }
+	//~ End IGaussianSplatInterface
 
 private:
 

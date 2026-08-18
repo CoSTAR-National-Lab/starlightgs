@@ -3,32 +3,31 @@
 #include "CoreMinimal.h"
 #include "SceneViewExtension.h"
 
-#include "GaussianSplatClippingVolume.h"
-#include "Rendering/GSplatGBuffer.h"
+#include "GaussianSplatClipping.h"
 
 
 DECLARE_STATS_GROUP(TEXT("Gaussians"), STATGROUP_Gaussians, STATCAT_Advanced);
 
-DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Submitted: Lit"), STAT_SplatsSubmittedLit, STATGROUP_Gaussians, GAUSSIANS_API);
-DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Submitted: Unlit"), STAT_SplatsSubmittedUnlit, STATGROUP_Gaussians, GAUSSIANS_API);
+DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Submitted: Lit"), STAT_SplatsSubmittedLit, STATGROUP_Gaussians, GAUSSIANSRENDERER_API);
+DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Submitted: Unlit"), STAT_SplatsSubmittedUnlit, STATGROUP_Gaussians, GAUSSIANSRENDERER_API);
 
-DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Rendered: Lit"), STAT_SplatsRenderedLit, STATGROUP_Gaussians, GAUSSIANS_API);
-DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Rendered: Unlit"), STAT_SplatsRenderedUnlit, STATGROUP_Gaussians, GAUSSIANS_API);
+DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Rendered: Lit"), STAT_SplatsRenderedLit, STATGROUP_Gaussians, GAUSSIANSRENDERER_API);
+DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Splats Rendered: Unlit"), STAT_SplatsRenderedUnlit, STATGROUP_Gaussians, GAUSSIANSRENDERER_API);
 
 
-class UGSWorldSubsystem;
-
-class FGaussianSplatSceneProxy;
+class IGaussianSplatInterface;
 class FGSGPUStats;
+class FGSplatGBuffer;
 
 /**
  * 
  */
-class GAUSSIANS_API FGSViewExtension : public FSceneViewExtensionBase
+class GAUSSIANSRENDERER_API  FGSViewExtension : public FSceneViewExtensionBase
 {
 public:
-	FGSViewExtension(const FAutoRegister& AutoRegister, UGSWorldSubsystem* Owner);
+	FGSViewExtension(const FAutoRegister& AutoRegister, UWorldSubsystem* Owner, IGSClippingVolumeContainerInterface* ClippingVolumeContainer);
 
+	//~ Begin ISceneViewExtension Interface
 	virtual void SetupViewFamily(FSceneViewFamily& InViewFamily) override;
 	virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override;
 	virtual void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override;
@@ -40,6 +39,7 @@ public:
 	virtual void PostRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily) override;
 
 	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
+	//~ End ISceneViewExtension Interface
 
 private:
 	// Renders all splats in given proxies into supplied render targets.
@@ -49,7 +49,7 @@ private:
 		FRDGBuilder& GraphBuilder, 
 		const FSceneView& InView, 
 		const FRenderTargetBindingSlots& RenderTargets, 
-		const TSet<FGaussianSplatSceneProxy*>& Proxies,
+		const TSet<IGaussianSplatInterface*>& Proxies,
 		const FGSGPUStats* GPUStats
 	);
 
@@ -66,23 +66,38 @@ private:
 	static void GSCullingPass(
 		FRDGBuilder& GraphBuilder,
 		const FSceneView& InView,
-		const TSet<FGaussianSplatSceneProxy*>& Proxies,
-		const TArray<FGSClippingVolumeParameters>& ClippingVolumes,
+		const TSet<IGaussianSplatInterface*>& Proxies,
+		const TArray<FGSClippingVolumeProxy>& ClippingVolumes,
 		bool bForceEnable
 	);
 
 public:
-	void RegisterProxy(FGaussianSplatSceneProxy* Proxy);
-	void UnregisterProxy(FGaussianSplatSceneProxy* Proxy);
+
+	// DO NOT CALL EVERY FRAME.
+	// Blocks game thread AND render thread until GPU work completes.
+	static void CopySplatGPUToCPU(
+		IGaussianSplatInterface* Proxy,
+		TArray<FVector3f>& OutPositions,
+		TArray<FVector3f>& OutScales,
+		TArray<FQuat4f>&   OutOrientations,
+		TArray<FVector4f>& OutSHAndOpacities,
+		TArray<FVector3f>& OutNormals,
+		TArray<FVector2f>& OutMetallicRoughness
+	);
+
+public:
+	void RegisterProxy(IGaussianSplatInterface* Proxy);
+	void UnregisterProxy(IGaussianSplatInterface* Proxy);
 
 private:
 	// Relit and unlit splats are kept separate as they are rendered in different passes
-	TSet<FGaussianSplatSceneProxy*> RelightableProxies;
-	TSet<FGaussianSplatSceneProxy*> NonRelightableProxies;
+	TSet<IGaussianSplatInterface*> RelightableProxies;
+	TSet<IGaussianSplatInterface*> NonRelightableProxies;
 
-	UGSWorldSubsystem* OwningSubsystem = nullptr;
+	UWorldSubsystem* OwningSubsystem = nullptr;
+	IGSClippingVolumeContainerInterface* ClippingVolumeContainer = nullptr;
 
-	TArray<FGSClippingVolumeParameters> ClippingVolumeParameters;
+	TArray<FGSClippingVolumeProxy> ClippingVolumeParameters;
 
 	TPimplPtr<FGSGPUStats> GPUStats = nullptr;
 

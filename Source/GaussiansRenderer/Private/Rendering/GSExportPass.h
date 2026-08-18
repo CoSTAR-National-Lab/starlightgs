@@ -3,7 +3,7 @@
 #include "RenderGraphFwd.h"
 #include "RHIResources.h"
 
-class FGaussianSplatSceneProxy;
+class IGaussianSplatInterface;
 
 
 // Buffers holding data being read back from GPU to CPU
@@ -30,7 +30,7 @@ namespace Gaussians
 {
 	void ExportSplatData(
 		FRDGBuilder& GraphBuilder,
-		const FGaussianSplatSceneProxy* Proxy,
+		const IGaussianSplatInterface* Proxy,
 		FGaussianSplatReadbackData& OutReadbackData
 	);
 }

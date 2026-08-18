@@ -4,7 +4,7 @@
 #include "GaussianData.h"
 
 
-BEGIN_UNIFORM_BUFFER_STRUCT(FGaussianSplatShaderResources,)
+BEGIN_UNIFORM_BUFFER_STRUCT(FGaussianSplatShaderResources, GAUSSIANSRENDERER_API)
 	SHADER_PARAMETER(int32, SplatCount)
 
 	// Required buffers
@@ -17,6 +17,11 @@ BEGIN_UNIFORM_BUFFER_STRUCT(FGaussianSplatShaderResources,)
 	SHADER_PARAMETER_SRV(StructuredBuffer<float3>, Normals)
 	SHADER_PARAMETER_SRV(StructuredBuffer<float>, HighOrderSH)
 	SHADER_PARAMETER_SRV(StructuredBuffer<float2>, MetallicRoughness)
+END_UNIFORM_BUFFER_STRUCT()
+
+BEGIN_UNIFORM_BUFFER_STRUCT(FGaussianSplatPrimitiveShaderResources, GAUSSIANSRENDERER_API)
+	SHADER_PARAMETER_SRV(Buffer<uint>, SplatIndexBuffer)
+	SHADER_PARAMETER_SRV(Buffer<uint>, SplatIndexCountBuffer)
 END_UNIFORM_BUFFER_STRUCT()
 
 
@@ -36,7 +41,7 @@ struct FGaussianSplatData;
  * While any missing properties will still have a valid SRV in the uniform buffer,
  * they should not be accessed in shaders.
  */
-class FGaussianSplatResource : public FRenderResource
+class GAUSSIANSRENDERER_API FGaussianSplatResource : public FRenderResource
 {
 public:
 	// Makes a copy of the splat data that will be read on the render thread when RHI is initialized

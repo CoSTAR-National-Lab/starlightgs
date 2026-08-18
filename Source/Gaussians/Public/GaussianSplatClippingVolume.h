@@ -1,20 +1,13 @@
 #pragma once 
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "GameFramework/Volume.h"
+
+#include "GaussianSplatClipping.h"
 
 
 #include "GaussianSplatClippingVolume.generated.h"
-
-
-UENUM()
-enum class EGaussianSplatClippingVolumeMode : uint8
-{
-	ClipAllInside = 0 UMETA(DisplayName="Clip Entirely Inside"),
-	ClipAnyInside     UMETA(DisplayName="Clip Any Inside"),
-	ClipAllOutside    UMETA(DisplayName="Clip Entirely Outside"),
-	ClipAnyOutside    UMETA(DisplayName="Clip Any Outside"),
-};
 
 
 UCLASS(hidecategories = (Collision, Brush, Attachment, Physics, Volume, BrushBuilder))
@@ -35,6 +28,10 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Gaussian Splat Clipping Volume")
 	int32 Mask = 0;
 
+	// This culling volume will be applied to any Gaussian Splat component whose tags intersect with the MaskTags.
+	UPROPERTY(EditAnywhere, Category = "Gaussian Splat Clipping Volume")
+	FGameplayTagContainer MaskTags;
+
 public:
 	AGaussianSplatClippingVolume();
 
@@ -43,18 +40,5 @@ public:
 	virtual void BeginDestroy() override;
 	//~ End UObject interface
 
-};
-
-
-// Render thread representation of GS clipping volume
-struct GAUSSIANS_API FGSClippingVolumeParameters
-{
-	EGaussianSplatClippingVolumeMode Mode;
-	int32 Priority;
-
-	FBox Bounds;
-
-	int32 Mask;
-
-	explicit FGSClippingVolumeParameters(const AGaussianSplatClippingVolume* ClippingVolume);
+	void PopulateClippingVolumeProxy(FGSClippingVolumeProxy& OutProxy) const;
 };

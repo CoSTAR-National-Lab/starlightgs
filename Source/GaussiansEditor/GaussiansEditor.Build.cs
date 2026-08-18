@@ -23,6 +23,7 @@ public class GaussiansEditor: ModuleRules
             "SlateCore",
             "ToolWidgets",
 
+            "GaussiansRenderer", 
             "Gaussians", 
         });
 

@@ -1,7 +1,7 @@
-#include "Gaussians.h"
+#include "GaussiansRenderer.h"
 #include "GSViewExtension.h"
 #include "GaussianSplatResource.h"
-#include "GaussianSplatSceneProxy.h"
+#include "GaussianSplatInterface.h"
 #include "GSGPUStats.h"
 
 #include "GaussiansHZB.h"
@@ -162,7 +162,7 @@ void FGSViewExtension::GaussianSplattingPass(
 	FRDGBuilder& GraphBuilder, 
 	const FSceneView& InView,
 	const FRenderTargetBindingSlots& RenderTargets,
-	const TSet<FGaussianSplatSceneProxy*>& Proxies,
+	const TSet<IGaussianSplatInterface*>& Proxies,
 	const FGSGPUStats* GPUStats)
 {
 	// Don't call this when there are no proxies
@@ -212,8 +212,8 @@ void FGSViewExtension::GaussianSplattingPass(
 	bool bAnySplatsRendered = false;
 	for (auto Proxy : Proxies)
 	{
-		FBoxSphereBounds ProxyBounds = Proxy->GetBounds();
-		if (!InView.GetCullingFrustum().IntersectBox(ProxyBounds.Origin, ProxyBounds.BoxExtent) | !Proxy->IsShown(&InView))
+		const FBoxSphereBounds& ProxyBounds = Proxy->GetSplatBounds();
+		if (!InView.GetCullingFrustum().IntersectBox(ProxyBounds.Origin, ProxyBounds.BoxExtent) | !Proxy->IsSplatShown(&InView))
 		{
 			continue;
 		}
@@ -242,7 +242,7 @@ void FGSViewExtension::GaussianSplattingPass(
 		}
 
 		TUniformBufferRef<FGaussianSplatShaderResources> ResourceUniformBuffer = TUniformBufferRef<FGaussianSplatShaderResources>{ Resource->GetUniformBuffer() };
-		TUniformBufferRef<FPrimitiveUniformShaderParameters> PrimitiveUniformBuffer = TUniformBufferRef<FPrimitiveUniformShaderParameters>{ Proxy->GetUniformBuffer() };
+		TUniformBufferRef<FPrimitiveUniformShaderParameters> PrimitiveUniformBuffer = TUniformBufferRef<FPrimitiveUniformShaderParameters>{ Proxy->GetProxyUniformBuffer() };
 
 		FGSPrepassCS::FParameters* PassParameters = GraphBuilder.AllocParameters<FGSPrepassCS::FParameters>();
 		PassParameters->View = InView.ViewUniformBuffer;

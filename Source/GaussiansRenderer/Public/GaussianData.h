@@ -9,7 +9,7 @@
  * Represents parsed data for a single splat, loaded from a regular PLY file.
  */
 USTRUCT()
-struct GAUSSIANS_API FGaussianSplatData
+struct GAUSSIANSRENDERER_API FGaussianSplatData
 {
 	GENERATED_BODY()
 

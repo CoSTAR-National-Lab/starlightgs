@@ -1,14 +1,12 @@
 #include "GaussianSplatSceneProxy.h"
 
-#include "Gaussians.h"
+#include "GaussiansRenderer.h"
 #include "GaussianSplatComponent.h"
 #include "GaussianSplatResource.h"
 #include "GaussianSplatVertexFactory.h"
 
 #include "GSWorldSubsystem.h"
 #include "GSViewExtension.h"
-
-IMPLEMENT_UNIFORM_BUFFER_STRUCT(FGaussianSplatPrimitiveShaderResources, "GSPrimitiveResources")
 
 
 FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(UGaussianSplatComponent* InComponent)

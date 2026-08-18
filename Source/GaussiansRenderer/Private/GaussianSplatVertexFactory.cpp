@@ -1,11 +1,10 @@
-
-
-
 #include "GaussianSplatVertexFactory.h"
+
+#include "GaussianSplatInterface.h"
 #include "GaussianSplatResource.h"
-#include "GaussianSplatSceneProxy.h"
 #include "MeshMaterialShader.h"
 #include "MeshDrawShaderBindings.h"
+
 
 IMPLEMENT_VERTEX_FACTORY_TYPE(FGaussianSplatVertexFactory, "/Plugin/StarLightGS/GSVertexFactory.ush",
 	  EVertexFactoryFlags::UsedWithMaterials

@@ -1,19 +1,19 @@
 #include "GSWorldSubsystem.h"
+
+#include "GaussianSplatClippingVolume.h"
 #include "GSViewExtension.h"
 
 #include "GaussianSplatComponent.h"
 #include "GaussianSplatSceneProxy.h"
 
-#include "RenderGraphBuilder.h"
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "Rendering/GSExportPass.h"
 
 
 void UGSWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
-	GaussianRendererViewExtension = FSceneViewExtensions::NewExtension<FGSViewExtension>(this);
+	GaussianRendererViewExtension = FSceneViewExtensions::NewExtension<FGSViewExtension>(this, this);
 }
 
 void UGSWorldSubsystem::Deinitialize()
@@ -39,12 +39,23 @@ void UGSWorldSubsystem::RemoveClippingVolume(const AGaussianSplatClippingVolume*
 	ClippingVolumes.Remove(ClippingVolume);
 }
 
-const TArray<const AGaussianSplatClippingVolume*>& UGSWorldSubsystem::GetClippingVolumes()
+TArray<FGSClippingVolumeProxy> UGSWorldSubsystem::BuildClippingVolumeProxies()
 {
-	ClippingVolumes.RemoveAll([](const auto& Element){ return Element == nullptr; });
-	return ClippingVolumes;
-}
+	ClippingVolumes.RemoveAll([](const auto& Elem){ return Elem == nullptr; });
 
+	TArray<FGSClippingVolumeProxy> OutProxies;
+	OutProxies.SetNumUninitialized(ClippingVolumes.Num());
+
+	for (int32 Index = 0; Index < ClippingVolumes.Num(); Index++)
+	{
+		if (!ClippingVolumes[Index]->bEnabled)
+			continue;
+
+		ClippingVolumes[Index]->PopulateClippingVolumeProxy(OutProxies[Index]);
+	}
+
+	return OutProxies;
+}
 
 bool UGSWorldSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
@@ -62,55 +73,15 @@ void UGSWorldSubsystem::ExportClippedSplat(UGaussianSplatComponent* Component)
 	TArray<FVector3f> Normals;
 	TArray<FVector2f> MetallicRoughness;
 
-	
-	ENQUEUE_RENDER_COMMAND(GaussiansExportClippedSplat)([&Positions, &Scales, &Orientations, &SHAndOpacities, &Normals, &MetallicRoughness, SceneProxy]
-	(FRHICommandListImmediate& RHICmdList)
-	{
-		bool bRelighting = SceneProxy->SupportsRelighting();
-
-		FRDGBuilder GraphBuilder(RHICmdList);
-		FGaussianSplatReadbackData ReadbackData;
-
-		Gaussians::ExportSplatData(
-			GraphBuilder,
-			SceneProxy,
-			ReadbackData
-		);
-
-		GraphBuilder.Execute();
-
-		// Make sure work is submitted to the GPU immediately so that we can wait on it
-		RHICmdList.ImmediateFlush(EImmediateFlushType::FlushRHIThread, ERHISubmitFlags::SubmitToGPU | ERHISubmitFlags::FlushRHIThread);
-
-		// Wait for work to complete on the GPU
-		ReadbackData.Fence->Wait(RHICmdList, RHICmdList.GetGPUMask());
-
-		// Now take the data from the buffers to populate CPU arrays that will form the asset
-		// First read the splat count to know how big to make the arrays
-		uint32 SplatCount = *static_cast<uint32*>(RHILockStagingBuffer(ReadbackData.SplatCount, 0, sizeof(uint32)));
-		RHIUnlockStagingBuffer(ReadbackData.SplatCount);
-		
-		auto DoCopyIntoBuffer = [&]<typename T>(FRHIStagingBuffer* StagingBuffer, TArray<T>& DestArray)
-		{
-			DestArray.SetNumUninitialized(SplatCount);
-
-			void* DataPtr = RHILockStagingBuffer(StagingBuffer, 0, SplatCount * sizeof(T));
-			FMemory::Memcpy(DestArray.GetData(), DataPtr, SplatCount * sizeof(T));
-			RHIUnlockStagingBuffer(StagingBuffer);
-		};
-
-		DoCopyIntoBuffer(ReadbackData.Positions, Positions);
-		DoCopyIntoBuffer(ReadbackData.Scales, Scales);
-		DoCopyIntoBuffer(ReadbackData.Orientations, Orientations);
-		DoCopyIntoBuffer(ReadbackData.SHAndOpacities, SHAndOpacities);
-		if (bRelighting)
-		{
-			DoCopyIntoBuffer(ReadbackData.Normals, Normals);
-			DoCopyIntoBuffer(ReadbackData.MetallicRoughness, MetallicRoughness);
-		}
-	});
-
-	FlushRenderingCommands();
+	GaussianRendererViewExtension->CopySplatGPUToCPU(
+		SceneProxy,
+		Positions,
+		Scales,
+		Orientations,
+		SHAndOpacities,
+		Normals,
+		MetallicRoughness
+	);
 
 	// Data is now ready to use to populate asset
 	// TODO: I want this to work in the runtime module, not editor module, since this is related to the world...

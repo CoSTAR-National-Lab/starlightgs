@@ -4,9 +4,14 @@
   "VersionName": "1.0",
   "Modules": [
     {
-      "Name": "Gaussians",
+      "Name": "GaussiansRenderer",
       "Type": "Runtime",
       "LoadingPhase": "PostConfigInit"
+    },
+    {
+      "Name": "Gaussians",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
     },
     {
       "Name": "GaussiansEditor",

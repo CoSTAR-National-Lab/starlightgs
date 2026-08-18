@@ -8,7 +8,7 @@
 #include "ScenePrivate.h"
 
 #include "GaussianSplatResource.h"
-#include "GaussianSplatSceneProxy.h"
+#include "GaussianSplatInterface.h"
 
 #include "GaussiansDefinitions.h"
 
@@ -63,8 +63,8 @@ int32 ConvertClippingMode(EGaussianSplatClippingVolumeMode Mode)
 void FGSViewExtension::GSCullingPass(
 	FRDGBuilder& GraphBuilder,
 	const FSceneView& InView,
-	const TSet<FGaussianSplatSceneProxy*>& Proxies,
-	const TArray<FGSClippingVolumeParameters>& CullingVolumes,
+	const TSet<IGaussianSplatInterface*>& Proxies,
+	const TArray<FGSClippingVolumeProxy>& CullingVolumes,
 	bool bForceEnable
 )
 {
@@ -102,7 +102,7 @@ void FGSViewExtension::GSCullingPass(
 		GraphBuilder.QueueBufferUpload(CullingVolumesBuffer, ClippingVolumeShaderData, NumCullingVolumes * sizeof(FGaussians_ClippingVolume), ERDGInitialDataFlags::NoCopy);
 	}
 
-	for (FGaussianSplatSceneProxy* Proxy : Proxies)
+	for (IGaussianSplatInterface* Proxy : Proxies)
 	{
 		// Check if culling required
 		if (!Proxy->RequiresNewCullingPass() && !bForceEnable)
@@ -124,7 +124,7 @@ void FGSViewExtension::GSCullingPass(
 
 		{
 			TUniformBufferRef<FGaussianSplatShaderResources> ResourceUniformBuffer = TUniformBufferRef<FGaussianSplatShaderResources>{ Proxy->GetResource_RenderThread()->GetUniformBuffer() };
-			TUniformBufferRef<FPrimitiveUniformShaderParameters> PrimitiveUniformBuffer = TUniformBufferRef<FPrimitiveUniformShaderParameters>{ Proxy->GetUniformBuffer() };
+			TUniformBufferRef<FPrimitiveUniformShaderParameters> PrimitiveUniformBuffer = TUniformBufferRef<FPrimitiveUniformShaderParameters>{ Proxy->GetProxyUniformBuffer() };
 
 			FGSplatCullingCS::FParameters* PassParameters = GraphBuilder.AllocParameters<FGSplatCullingCS::FParameters>();
 			PassParameters->View = ViewInfo.ViewUniformBuffer;
