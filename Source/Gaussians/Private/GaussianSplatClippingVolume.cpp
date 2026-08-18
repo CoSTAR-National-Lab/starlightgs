@@ -44,6 +44,20 @@ void AGaussianSplatClippingVolume::BeginDestroy()
 	}
 }
 
+#if WITH_EDITOR
+void AGaussianSplatClippingVolume::PostEditMove(bool bFinished)
+{
+	Super::PostEditMove(bFinished);
+	MarkClippingStateDirty();
+}
+
+void AGaussianSplatClippingVolume::PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	MarkClippingStateDirty();
+}
+#endif
+
 void AGaussianSplatClippingVolume::PopulateClippingVolumeProxy(FGSClippingVolumeProxy& OutProxy) const
 {
 	OutProxy.Mode = Mode;
@@ -51,4 +65,15 @@ void AGaussianSplatClippingVolume::PopulateClippingVolumeProxy(FGSClippingVolume
 	OutProxy.Bounds = GetBounds().GetBox();
 	OutProxy.Tags = ClippingTags;
 	OutProxy.bExactMatchOnly = bClippingTagsExactMatchOnly;
+}
+
+void AGaussianSplatClippingVolume::MarkClippingStateDirty() const
+{
+	if (UWorld* World = GetWorld())
+	{
+		if (UGSWorldSubsystem* WorldSubsystem = World->GetSubsystem<UGSWorldSubsystem>())
+		{
+			WorldSubsystem->MarkClippingDirtyFlags();
+		}
+	}
 }

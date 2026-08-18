@@ -81,28 +81,18 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 
 	// Run culling for all splats that need it
 	{
-		bool bForceEnable = CVarGaussiansForceCullEveryFrame.GetValueOnRenderThread();
+		bool bForceEnable = ClippingVolumeContainer->GetForceClippingEvaluation() || CVarGaussiansForceCullEveryFrame.GetValueOnRenderThread();
 		TSet<IGaussianSplatInterface*> AllProxies = RelightableProxies.Union(NonRelightableProxies);
 
-		bool bRequiresCullingPass = bForceEnable;
-		if (!bForceEnable)
-		{
-			for (auto Proxy : AllProxies)
-			{
-				bRequiresCullingPass |= Proxy->RequiresNewCullingPass();
-			}
-		}
+		GSCullingPass(
+			GraphBuilder,
+			InView,
+			AllProxies,
+			ClippingVolumeParameters,
+			bForceEnable
+		);
 
-		if (bRequiresCullingPass)
-		{
-			GSCullingPass(
-				GraphBuilder,
-				InView,
-				AllProxies,
-				ClippingVolumeParameters,
-				bForceEnable
-			);
-		}
+		ClippingVolumeContainer->ClearClippingDirtyFlags();
 	}
 
 	// Process relightable proxies

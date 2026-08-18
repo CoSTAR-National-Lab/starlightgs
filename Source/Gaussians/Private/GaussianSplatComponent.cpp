@@ -40,9 +40,13 @@ void UGaussianSplatComponent::PostEditChangeProperty(struct FPropertyChangedEven
 		return;
 	}
 
+	bool bCullingDirty = false;
+
 	FName PropertyName = PropertyChangedEvent.GetPropertyName();
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(UGaussianSplatComponent, GaussianSplatAsset))
 	{
+		bCullingDirty = true;
+
 		if (PrevGaussianSplatAsset)
 		{
 			PrevGaussianSplatAsset->OnAssetUpdate.RemoveDynamic(this, &UGaussianSplatComponent::OnAssetUpdated);
@@ -52,6 +56,15 @@ void UGaussianSplatComponent::PostEditChangeProperty(struct FPropertyChangedEven
 		{
 			GaussianSplatAsset->OnAssetUpdate.AddDynamic(this, &UGaussianSplatComponent::OnAssetUpdated);
 		}
+	}
+
+	bCullingDirty |= PropertyName == GET_MEMBER_NAME_CHECKED(UGaussianSplatComponent, SplatScaleMultiplier);
+	bCullingDirty |= PropertyName == GET_MEMBER_NAME_CHECKED(UGaussianSplatComponent, ClippingTags);
+	bCullingDirty |= PropertyName == GET_MEMBER_NAME_CHECKED(UGaussianSplatComponent, bClippingTagsExactMatchOnly);
+
+	if (bCullingDirty)
+	{
+		MarkRenderStateDirty();
 	}
 
 	if (SpriteTexture && SpriteComponent)
@@ -87,6 +100,13 @@ void UGaussianSplatComponent::OnUnregister()
 	{
 		GaussianSplatAsset->OnAssetUpdate.RemoveDynamic(this, &UGaussianSplatComponent::OnAssetUpdated);
 	}
+}
+
+void UGaussianSplatComponent::PostEditComponentMove(bool bFinished)
+{
+	Super::PostEditComponentMove(bFinished);
+
+	MarkRenderStateDirty();
 }
 
 FPrimitiveSceneProxy* UGaussianSplatComponent::CreateSceneProxy()

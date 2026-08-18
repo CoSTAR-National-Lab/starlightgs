@@ -29,7 +29,13 @@ public:
 
 	//~ Begin IGSClippingVolumeContainerInterface
 	virtual TArray<FGSClippingVolumeProxy> BuildClippingVolumeProxies() override;
+	// Resets dirty flag when queried
+	virtual bool GetForceClippingEvaluation() const override;
+	virtual void MarkClippingDirtyFlags() override;
+	virtual void ClearClippingDirtyFlags() override;
 	//~ End IGSClippingVolumeContainerInterface
+
+	void CleanClippingVolumesCollection();
 
 	// Create a new splat asset by applying clipping volumes in the scene to an existing splat model
 	// Don't call every frame as this will stall game thread on render thread
@@ -43,4 +49,5 @@ private:
 
 	UPROPERTY()
 	TArray<const AGaussianSplatClippingVolume*> ClippingVolumes;
+	bool bClippingVolumesDirty = false;
 };

@@ -35,13 +35,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats", AdvancedDisplay)
 	bool bForceDrawVertexFactoryInMainPass = false;
 
-
 public:
 
 	UGaussianSplatComponent();
 
 	//~ Begin UObject Interface
 #if WITH_EDITOR
+	virtual void PostEditComponentMove(bool bFinished) override;
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 	//~ End UObject Interface

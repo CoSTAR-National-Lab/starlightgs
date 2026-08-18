@@ -16,6 +16,7 @@ public class GaussiansEditor: ModuleRules
 
             "Engine", 
             "UnrealEd",
+            "EditorSubsystem",
             "ApplicationCore",
             "InputCore",
 

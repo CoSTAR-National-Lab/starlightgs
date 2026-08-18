@@ -38,7 +38,16 @@ public:
 	//~ Begin UObject interface
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginDestroy() override;
+
+#if WITH_EDITOR
+	virtual void PostEditMove(bool bFinished) override;
+	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 	//~ End UObject interface
 
 	void PopulateClippingVolumeProxy(FGSClippingVolumeProxy& OutProxy) const;
+
+	// Will force all splats to re-evaluate their culling
+	// Call when programatically moving culling volumes
+	void MarkClippingStateDirty() const;
 };

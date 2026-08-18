@@ -77,10 +77,6 @@ void FGSViewExtension::GSCullingPass(
 
 	for (IGaussianSplatInterface* Proxy : Proxies)
 	{
-		// Check if culling required
-		if (!Proxy->RequiresNewCullingPass() && !bForceEnable)
-			continue;
-
 		// Build list of culling volumes for this proxy
 		// First determine which culling volumes to apply
 		RelevantCullingVolumes.Empty(CullingVolumes.Num());
@@ -91,6 +87,10 @@ void FGSViewExtension::GSCullingPass(
 				RelevantCullingVolumes.Add(&Volume);
 			}
 		}
+
+		// Check if culling required
+		if (!Proxy->RequiresNewCullingPass() && !bForceEnable)
+			continue;
 
 		const uint32 NumCullingVolumes = RelevantCullingVolumes.Num();
 		FRDGBufferRef CullingVolumesBuffer = NumCullingVolumes == 0

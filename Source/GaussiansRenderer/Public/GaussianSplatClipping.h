@@ -35,4 +35,11 @@ public:
 	virtual ~IGSClippingVolumeContainerInterface() = default;
 
 	virtual TArray<FGSClippingVolumeProxy> BuildClippingVolumeProxies() = 0;
+
+	// If true, clipping will be re-evaluated on all splats
+	// For use in cases where a clipping volume has been added or removed
+	virtual bool GetForceClippingEvaluation() const = 0;
+
+	virtual void MarkClippingDirtyFlags() = 0;
+	virtual void ClearClippingDirtyFlags() = 0;
 };

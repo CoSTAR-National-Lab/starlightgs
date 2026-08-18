@@ -28,6 +28,7 @@ void UGSWorldSubsystem::AddClippingVolume(const AGaussianSplatClippingVolume* Cl
 	if (!ClippingVolumes.Contains(ClippingVolume))
 	{
 		ClippingVolumes.Add(ClippingVolume);
+		bClippingVolumesDirty = true;
 	}
 }
 
@@ -37,11 +38,11 @@ void UGSWorldSubsystem::RemoveClippingVolume(const AGaussianSplatClippingVolume*
 	check(ClippingVolumes.Contains(ClippingVolume));
 
 	ClippingVolumes.Remove(ClippingVolume);
+	bClippingVolumesDirty = true;
 }
 
 TArray<FGSClippingVolumeProxy> UGSWorldSubsystem::BuildClippingVolumeProxies()
 {
-	ClippingVolumes.RemoveAll([](const auto& Elem){ return Elem == nullptr; });
 
 	TArray<FGSClippingVolumeProxy> OutProxies;
 	OutProxies.SetNum(ClippingVolumes.Num());
@@ -55,6 +56,27 @@ TArray<FGSClippingVolumeProxy> UGSWorldSubsystem::BuildClippingVolumeProxies()
 	}
 
 	return OutProxies;
+}
+
+bool UGSWorldSubsystem::GetForceClippingEvaluation() const
+{
+	return bClippingVolumesDirty;
+
+}
+
+void UGSWorldSubsystem::MarkClippingDirtyFlags()
+{
+	bClippingVolumesDirty = true;
+}
+
+void UGSWorldSubsystem::ClearClippingDirtyFlags()
+{
+	bClippingVolumesDirty = false;
+}
+
+void UGSWorldSubsystem::CleanClippingVolumesCollection()
+{
+	ClippingVolumes.RemoveAll([](const auto& Elem) { return Elem == nullptr; });
 }
 
 bool UGSWorldSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
