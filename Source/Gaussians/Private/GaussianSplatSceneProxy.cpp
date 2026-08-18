@@ -9,10 +9,11 @@
 #include "GSViewExtension.h"
 
 
-FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(UGaussianSplatComponent* InComponent)
+FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(const UGaussianSplatComponent* InComponent)
 	: FPrimitiveSceneProxy(InComponent)
 	, ScaleMultiplier(InComponent->SplatScaleMultiplier)
-	, ClippingVolumeMask(InComponent->ClippingVolumeMask)
+	, ClippingTags(InComponent->ClippingTags)
+	, bClippingTagsExactMatchOnly(InComponent->bClippingTagsExactMatchOnly)
 	, VertexFactory(GMaxRHIFeatureLevel)
 {
 	if (InComponent->GaussianSplatAsset)
@@ -243,6 +244,11 @@ bool FGaussianSplatSceneProxy::SupportsRelighting() const
 {
 	check(IsInRenderingThread());
 	return GaussianSplatResource_RenderThread->GetResource()->SupportsRelighting();
+}
+
+bool FGaussianSplatSceneProxy::HasAnyClippingTags(const struct FGameplayTagContainer& Tags, bool bExactMatch) const
+{
+	return (bClippingTagsExactMatchOnly || bExactMatch) ? ClippingTags.HasAnyExact(Tags) : ClippingTags.HasAny(Tags);
 }
 
 void FGaussianSplatSceneProxy::CreateIndexBufferResources(FRHICommandListBase& RHICmdList)

@@ -27,7 +27,6 @@ class FGSplatCullingCS : public FGlobalShader
 
 		SHADER_PARAMETER(int32, NumClippingVolumes)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGaussians_ClippingVolume>, ClippingVolumes)
-		SHADER_PARAMETER(uint32, ClippingVolumeMask)
 
 		// Out
 		SHADER_PARAMETER_UAV(RWBuffer<uint32>, RWSplatIndexBufferAllocator)
@@ -73,40 +72,51 @@ void FGSViewExtension::GSCullingPass(
 
 	RDG_EVENT_SCOPE(GraphBuilder, "Gaussians: Culling");
 
-	const uint32 NumCullingVolumes = CullingVolumes.Num();
-	FRDGBufferRef CullingVolumesBuffer = NumCullingVolumes == 0
-		? GSystemTextures.GetDefaultStructuredBuffer(GraphBuilder, sizeof(FGaussians_ClippingVolume))
-		: GraphBuilder.CreateBuffer(
-			FRDGBufferDesc::CreateStructuredDesc(sizeof(FGaussians_ClippingVolume), NumCullingVolumes),
-			TEXT("Gaussians.ClippingVolumes")
-		);
-
-	if (NumCullingVolumes > 0)
-	{
-		FGaussians_ClippingVolume* ClippingVolumeShaderData = GraphBuilder.AllocPODArray<FGaussians_ClippingVolume>(NumCullingVolumes);
-		//const FVector& PreViewTranslation = ViewInfo.ViewMatrices.GetPreViewTranslation();
-		const FVector& PreViewTranslation = FVector::ZeroVector;
-
-		auto WritePtr = ClippingVolumeShaderData;
-		for (const auto& Volume : CullingVolumes)
-		{
-			WritePtr->Min = static_cast<FVector3f>(Volume.Bounds.Min + PreViewTranslation);
-			WritePtr->Max = static_cast<FVector3f>(Volume.Bounds.Max + PreViewTranslation);
-			WritePtr->Mode = ConvertClippingMode(Volume.Mode);
-			WritePtr->Mask = Volume.Mask;
-
-			WritePtr++;
-		}
-
-		// Safe to no copy since initial data was allocated via graph builder
-		GraphBuilder.QueueBufferUpload(CullingVolumesBuffer, ClippingVolumeShaderData, NumCullingVolumes * sizeof(FGaussians_ClippingVolume), ERDGInitialDataFlags::NoCopy);
-	}
+	TArray<const FGSClippingVolumeProxy*> RelevantCullingVolumes;
+	RelevantCullingVolumes.Reserve(CullingVolumes.Num());
 
 	for (IGaussianSplatInterface* Proxy : Proxies)
 	{
 		// Check if culling required
 		if (!Proxy->RequiresNewCullingPass() && !bForceEnable)
 			continue;
+
+		// Build list of culling volumes for this proxy
+		// First determine which culling volumes to apply
+		RelevantCullingVolumes.Empty(CullingVolumes.Num());
+		for (const auto& Volume : CullingVolumes)
+		{
+			if (Proxy->HasAnyClippingTags(Volume.Tags, Volume.bExactMatchOnly))
+			{
+				RelevantCullingVolumes.Add(&Volume);
+			}
+		}
+
+		const uint32 NumCullingVolumes = RelevantCullingVolumes.Num();
+		FRDGBufferRef CullingVolumesBuffer = NumCullingVolumes == 0
+			? GSystemTextures.GetDefaultStructuredBuffer(GraphBuilder, sizeof(FGaussians_ClippingVolume))
+			: GraphBuilder.CreateBuffer(
+				FRDGBufferDesc::CreateStructuredDesc(sizeof(FGaussians_ClippingVolume), NumCullingVolumes),
+				TEXT("Gaussians.ClippingVolumes")
+			);
+
+		if (NumCullingVolumes > 0)
+		{
+			FGaussians_ClippingVolume* ClippingVolumeShaderData = GraphBuilder.AllocPODArray<FGaussians_ClippingVolume>(NumCullingVolumes);
+
+			auto WritePtr = ClippingVolumeShaderData;
+			for (const auto& Volume : RelevantCullingVolumes)
+			{
+				WritePtr->Min = static_cast<FVector3f>(Volume->Bounds.Min);
+				WritePtr->Max = static_cast<FVector3f>(Volume->Bounds.Max);
+				WritePtr->Mode = ConvertClippingMode(Volume->Mode);
+
+				WritePtr++;
+			}
+
+			// Safe to no copy since initial data was allocated via graph builder
+			GraphBuilder.QueueBufferUpload(CullingVolumesBuffer, ClippingVolumeShaderData, NumCullingVolumes * sizeof(FGaussians_ClippingVolume), ERDGInitialDataFlags::NoCopy);
+		}
 
 		FRHIUnorderedAccessView* IndexBuffer = Proxy->GetIndexBufferUAV();
 		FRHIUnorderedAccessView* CountBuffer = Proxy->GetIndexCountBufferUAV();
@@ -135,7 +145,6 @@ void FGSViewExtension::GSCullingPass(
 
 			PassParameters->NumClippingVolumes = NumCullingVolumes;
 			PassParameters->ClippingVolumes = GraphBuilder.CreateSRV(CullingVolumesBuffer);
-			PassParameters->ClippingVolumeMask = Proxy->GetClippingVolumeMask();
 
 			PassParameters->RWSplatIndexBufferAllocator = CountBuffer;
 			PassParameters->RWSplatIndices = IndexBuffer;

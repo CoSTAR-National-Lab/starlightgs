@@ -1,4 +1,6 @@
 #include "GaussianSplatComponent.h"
+
+#include "GameplayTagsManager.h"
 #include "GaussianSplatSceneProxy.h"
 #include "GSWorldSubsystem.h"
 #include "Components/BillboardComponent.h"
@@ -6,11 +8,12 @@
 UGaussianSplatComponent::UGaussianSplatComponent()
 {
 	static ConstructorHelpers::FObjectFinder<UMaterial> MaterialFinder(TEXT("/Gaussians/Materials/M_SplatShadowMaterial.M_SplatShadowMaterial"));
-
 	if (MaterialFinder.Succeeded())
 	{
 		SplatMaterial = MaterialFinder.Object;
 	}
+
+	ClippingTags.AddTag(UGameplayTagsManager::Get().RequestGameplayTag("StarLightGS.CullingVolumes.Default", false));
 
 #if WITH_EDITORONLY_DATA
 	bVisualizeComponent = true;

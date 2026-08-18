@@ -1,6 +1,7 @@
 #pragma once 
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 
 #include "GaussianSplatClipping.generated.h"
 
@@ -18,12 +19,13 @@ enum class EGaussianSplatClippingVolumeMode : uint8
 // Render thread representation of GS clipping volume
 struct GAUSSIANSRENDERER_API FGSClippingVolumeProxy
 {
-	EGaussianSplatClippingVolumeMode Mode;
-	int32 Priority;
+	EGaussianSplatClippingVolumeMode Mode = EGaussianSplatClippingVolumeMode::ClipAllInside;
+	int32 Priority = 0;
 
-	FBox Bounds;
+	FBox Bounds{ };
 
-	int32 Mask;
+	FGameplayTagContainer Tags{ };
+	bool bExactMatchOnly = false;
 };
 
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GameplayTagContainer.h"
 #include "GaussianSplatInterface.h"
 #include "GaussianSplatVertexFactory.h"
 
@@ -15,7 +16,7 @@ class FGSViewExtension;
 class FGaussianSplatSceneProxy : public FPrimitiveSceneProxy, public IGaussianSplatInterface
 {
 public:
-	FGaussianSplatSceneProxy(UGaussianSplatComponent* InComponent);
+	FGaussianSplatSceneProxy(const UGaussianSplatComponent* InComponent);
 	virtual ~FGaussianSplatSceneProxy();
 
 	//~ Begin FPrimitiveSceneProxy Interface
@@ -53,7 +54,7 @@ public:
 	virtual bool SupportsRelighting() const override;
 
 	virtual inline float GetScaleMultiplier() const override { return ScaleMultiplier; }
-	virtual inline int32 GetClippingVolumeMask() const override { return ClippingVolumeMask; }
+	virtual bool HasAnyClippingTags(const FGameplayTagContainer& Tags, bool bExactMatch) const override;
 	//~ End IGaussianSplatInterface
 
 private:
@@ -79,7 +80,10 @@ private:
 
 	// Per-instance properties
 	float ScaleMultiplier = 1.0f;
-	int32 ClippingVolumeMask = 0;
+
+	FGameplayTagContainer ClippingTags;
+	bool bClippingTagsExactMatchOnly = false;
+
 	bool bDrawVFInMainPass = false;
 
 	//Proxy vertex factory

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Components/PrimitiveComponent.h"
 
 #include "GSplatAsset.h"
@@ -25,8 +26,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats")
 	UMaterial* SplatMaterial;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats")
-	int32 ClippingVolumeMask = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats|Clipping", DisplayName="Tags")
+	FGameplayTagContainer ClippingTags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats|Clipping", DisplayName="Exact Match Only")
+	bool bClippingTagsExactMatchOnly = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats", AdvancedDisplay)
 	bool bForceDrawVertexFactoryInMainPass = false;

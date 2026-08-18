@@ -6,7 +6,7 @@
 
 AGaussianSplatClippingVolume::AGaussianSplatClippingVolume()
 {
-	MaskTags.AddTag(FGameplayTag::RequestGameplayTag("StarLightGS.CullingVolumes.Default", false));
+	ClippingTags.AddTag(FGameplayTag::RequestGameplayTag("StarLightGS.CullingVolumes.Default", false));
 
 	bColored = true;
 	BrushColor.R = 0;
@@ -49,5 +49,6 @@ void AGaussianSplatClippingVolume::PopulateClippingVolumeProxy(FGSClippingVolume
 	OutProxy.Mode = Mode;
 	OutProxy.Priority = Priority;
 	OutProxy.Bounds = GetBounds().GetBox();
-	OutProxy.Mask = Mask;
+	OutProxy.Tags = ClippingTags;
+	OutProxy.bExactMatchOnly = bClippingTagsExactMatchOnly;
 }

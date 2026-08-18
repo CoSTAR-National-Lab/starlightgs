@@ -44,7 +44,7 @@ TArray<FGSClippingVolumeProxy> UGSWorldSubsystem::BuildClippingVolumeProxies()
 	ClippingVolumes.RemoveAll([](const auto& Elem){ return Elem == nullptr; });
 
 	TArray<FGSClippingVolumeProxy> OutProxies;
-	OutProxies.SetNumUninitialized(ClippingVolumes.Num());
+	OutProxies.SetNum(ClippingVolumes.Num());
 
 	for (int32 Index = 0; Index < ClippingVolumes.Num(); Index++)
 	{

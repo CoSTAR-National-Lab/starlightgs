@@ -25,12 +25,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Gaussian Splat Clipping Volume")
 	int32 Priority = 0;
 
-	UPROPERTY(EditAnywhere, Category = "Gaussian Splat Clipping Volume")
-	int32 Mask = 0;
-
 	// This culling volume will be applied to any Gaussian Splat component whose tags intersect with the MaskTags.
 	UPROPERTY(EditAnywhere, Category = "Gaussian Splat Clipping Volume")
-	FGameplayTagContainer MaskTags;
+	FGameplayTagContainer ClippingTags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splat Clipping Volume", DisplayName = "Exact Match Only")
+	bool bClippingTagsExactMatchOnly = false;
 
 public:
 	AGaussianSplatClippingVolume();

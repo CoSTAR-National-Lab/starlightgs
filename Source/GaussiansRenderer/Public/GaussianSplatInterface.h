@@ -32,5 +32,5 @@ public:
 	virtual bool SupportsRelighting() const = 0;
 
 	virtual float GetScaleMultiplier() const = 0;
-	virtual int32 GetClippingVolumeMask() const = 0;
+	virtual bool HasAnyClippingTags(const struct FGameplayTagContainer& Tags, bool bExactMatch) const = 0;
 };

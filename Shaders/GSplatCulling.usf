@@ -16,8 +16,6 @@ RWBuffer<uint> RWSplatIndices;
 uint NumClippingVolumes;
 StructuredBuffer<FGaussians_ClippingVolume> ClippingVolumes;
 
-uint ClippingVolumeMask;
-
 float SplatScaleMultiplier;
 
 
@@ -81,10 +79,6 @@ void GSplatCullingCS(uint3 GroupId : SV_GroupID, uint GroupIndex : SV_GroupIndex
 		for (uint i = 0; i < NumClippingVolumes; i++)
 		{
 			FGaussians_ClippingVolume ClippingVolume = ClippingVolumes[i];
-			if ((ClippingVolumeMask & ClippingVolume.Mask) == 0)
-			{
-				continue;
-			}
 
 			switch (ClippingVolume.Mode)
 			{
