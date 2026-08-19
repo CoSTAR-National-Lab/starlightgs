@@ -7,23 +7,18 @@
 
 UGaussianSplatComponent::UGaussianSplatComponent()
 {
-	static ConstructorHelpers::FObjectFinder<UMaterial> MaterialFinder(TEXT("/Gaussians/Materials/M_SplatShadowMaterial.M_SplatShadowMaterial"));
-	if (MaterialFinder.Succeeded())
-	{
-		SplatMaterial = MaterialFinder.Object;
-	}
+	static ConstructorHelpers::FObjectFinder<UMaterial> MaterialFinder(TEXT("/StarLightGS/Materials/M_SplatShadowMaterial.M_SplatShadowMaterial"));
+	checkf(MaterialFinder.Succeeded(), TEXT("Could not find asset - plugin is not installed correctly."));
+	SplatMaterial = MaterialFinder.Object;
 
 	ClippingTags.AddTag(UGameplayTagsManager::Get().RequestGameplayTag("StarLightGS.CullingVolumes.Default", false));
 
 #if WITH_EDITORONLY_DATA
 	bVisualizeComponent = true;
 
-	static ConstructorHelpers::FObjectFinder<UTexture2D> SpriteFinder(TEXT("/Gaussians/Splidget.Splidget"));
-
-	if (SpriteFinder.Succeeded())
-	{
-		SpriteTexture = SpriteFinder.Object;
-	}
+	static ConstructorHelpers::FObjectFinder<UTexture2D> SpriteFinder(TEXT("/StarLightGS/Splidget.Splidget"));
+	checkf(SpriteFinder.Succeeded(), TEXT("Could not find asset - plugin is not installed correctly."));
+	SpriteTexture = SpriteFinder.Object;
 
 #endif
 }
