@@ -668,7 +668,7 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(FVertexFacto
 }
 
 /** Converts from vertex factory specific interpolants to a FMaterialPixelParameters, which is used by material inputs. */
-FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVSToPS Interpolants, float4 SvPosition)
+FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVSToPS Interpolants, in out float4 SvPosition)
 {
 	// GetMaterialPixelParameters is responsible for fully initializing the result
     FMaterialPixelParameters Result = MakeInitializedMaterialPixelParameters();
@@ -679,15 +679,18 @@ FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVS
 	{
 		Result.TexCoords[CoordinateIndex] = GetUV(Interpolants, CoordinateIndex);
 	}
+
+	float2 UV = abs(Result.TexCoords[0] - 0.5);
+	float Power = 1.f-length(UV);
+	//float2 DistanceFromMean = (Interpolants.MeanScreenSpacePosition.xy - Interpolants.VertexSvPosition.xy);
+    //float Power = dot(Interpolants.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
+    float Alpha = Power * Interpolants.Opacity;
+
+    SvPosition.z -= Alpha * 0.00005;
 #endif	//NUM_MATERIAL_TEXCOORDS
 
-	//float2 DistanceFromMean = (Interpolants.MeanScreenSpacePosition.xy - Interpolants.VertexSvPosition.xy);
-
-    //float Power = dot(Interpolants.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
-    //float Alpha = exp(Power) * Interpolants.Opacity;
 	//Result.VertexColor = float4(Alpha, 1, 1, 1);
 	Result.VertexColor = float4(Interpolants.Conic.xyz, Interpolants.Opacity);
-    
     Result.PrimitiveId = GetPrimitiveId(Interpolants);
       
     return Result;
