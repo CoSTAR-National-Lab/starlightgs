@@ -160,12 +160,13 @@ ComputeSplatParameters(
 {
     float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex]);
     float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(GSResources.Orientations[SplatIndex]));
-
     float3 MeanPosition = GSResources.Positions[SplatIndex];
-    //float3 MeanPosition = float3(0, 0, 0);
 
+    ////DebugSplat
+    //float3 MeanPosition = float3(0, 0, 0);
     //float3x3 ScaleMatrix = VecToScaleMatrix(float3(0.01,0.02,0.01));
-    //float3x3 RotationMatrix = mul(QuatToMatrix(QuatIdentity()), DFToFloat3x3(Primitive.LocalToWorld));
+    //float3x3 RotationMatrix = DFToFloat3x3(Primitive.WorldToLocal);
+    
 
 	// Calculate covariance matrix
     float3x3 T = mul(RotationMatrix, ScaleMatrix);
@@ -173,7 +174,7 @@ ComputeSplatParameters(
 
     if (IsOrthoProjection(ViewToClip))
     {
-        float3x3 W = (float3x3) ViewToTranslatedWorld; // i dont get why this has to be transposed
+        float3x3 W = transpose((float3x3) TranslatedWorldToView); 
         float3x3 covView = mul(W, mul(Covariance3D, transpose(W)));
 
         float X = covView[0][0];
@@ -209,24 +210,14 @@ ComputeSplatParameters(
             worldOffset.xyz = LocalPosition.x * float3(MajorAxis,0) + LocalPosition.y * float3(MinorAxis, 0);
         };
 
-
-        //worldOffset.xyz = CameraRight * LocalPosition.x + CameraUp * LocalPosition.y * 2;
-		//to UU
         worldOffset *= 100.f;
 
         float3x3 CamM = (float3x3) ViewToTranslatedWorld;
-        //View Space is Local Space
         worldOffset.xyz = mul(worldOffset.xyz,CamM);
 
-        //float4 TranslatedWorldPosition = TransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld);
+        float4 TranslatedMeanPosition = TransformLocalToTranslatedWorld(MeanPosition, Primitive.LocalToWorld);
 
-        #if UE_DF_NO_FAST_MATH
-        	float3 TranslatedWorldPositionOrigin = DFAddDemote(DFGetOrigin(Primitive.LocalToWorld), ResolvedView.PreViewTranslation);
-        #else
-        float3 TranslatedWorldPositionOrigin = DFFastLocalSubtractDemote(Primitive.LocalToWorld.PostTranslation, DFNegate(ResolvedView.PreViewTranslation)) + Primitive.LocalToWorld.M[3].xyz;
-        #endif
-
-        OutWorldPosition = float4(MeanPosition + worldOffset.xyz + TranslatedWorldPositionOrigin, 1);
+        OutWorldPosition = float4(TranslatedMeanPosition.xyz + worldOffset.xyz, 1);
 
         OutConic = Conic;
         OutWorldNormal = RotateLocalToWorld(GSResources.Normals[SplatIndex], Primitive.LocalToWorld, Primitive.InvNonUniformScale);
@@ -399,7 +390,7 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
     Intermediates.LocalPos = float4(Quad[Input.VertexId % 6], 0, 1);
 
     //cull very non opaque splats
-    if (GSResources.SHAndOpacities[SplatIndex].w < 0.9)
+    if (GSResources.SHAndOpacities[SplatIndex].w < 0.95)
     {
         Intermediates.WorldPosition = float4(0, 0, 0, 0);
         Intermediates.Opacity = 0;
