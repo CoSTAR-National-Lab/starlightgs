@@ -159,7 +159,7 @@ ComputeSplatParameters(
 )
 {
     float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex]);
-    float3x3 RotationMatrix = mul(DFToFloat3x3(Primitive.LocalToWorld), QuatToMatrix(GSResources.Orientations[SplatIndex]));
+    float3x3 RotationMatrix = mul(transpose(DFToFloat3x3(Primitive.LocalToWorld)), QuatToMatrix(GSResources.Orientations[SplatIndex]));
     float3 MeanPosition = GSResources.Positions[SplatIndex];
 
     ////DebugSplat
