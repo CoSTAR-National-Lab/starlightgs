@@ -26,7 +26,7 @@ public:
 	int32 Priority = 0;
 
 	// This culling volume will be applied to any Gaussian Splat component whose tags intersect with the MaskTags.
-	UPROPERTY(EditAnywhere, Category = "Gaussian Splat Clipping Volume")
+	UPROPERTY(EditAnywhere, Category = "Gaussian Splat Clipping Volume", DisplayName="Tags")
 	FGameplayTagContainer ClippingTags;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splat Clipping Volume", DisplayName = "Exact Match Only")

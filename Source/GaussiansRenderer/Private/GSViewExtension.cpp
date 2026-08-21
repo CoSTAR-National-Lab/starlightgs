@@ -22,14 +22,14 @@ DECLARE_GPU_STAT_NAMED(GaussiansLit, TEXT("Gaussians: Lit"));
 
 
 static TAutoConsoleVariable<bool> CVarGaussiansDisableViewExtension(
-	TEXT("r.Gaussians.DisableViewExtension"),
+	TEXT("r.Gaussians.Debug.DisableViewExtension"),
 	false,
 	TEXT("Debug tool to disable primary view rendering via view extension."),
 	ECVF_RenderThreadSafe
 );
 
 static TAutoConsoleVariable<bool> CVarGaussiansForceCullEveryFrame(
-	TEXT("r.Gaussians.CullEveryFrame"),
+	TEXT("r.Gaussians.Debug.CullEveryFrame"),
 	false,
 	TEXT("Forces splat culling (against clipping volumes) to run every frame."),
 	ECVF_RenderThreadSafe
