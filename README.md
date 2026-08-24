@@ -1,5 +1,7 @@
 # StarLightGS
 
+![](Resources/Demo.gif)
+
 Co**STAR** Re**Light**ing **G**aussian **S**plats
 
 Gaussian splat renderer for Unreal Engine 5.7+ with a focus on relighting and native shadow rendering (without proxy meshes).
@@ -26,10 +28,7 @@ This plugin supports rendering of splats with and without relighting. To use rel
 - Drag and drop the Gaussian Splat asset onto the viewport to place it into the level.
 - If your PLY supports relighting, relighting will be function out-of-the-box.
 
-For full usage, see the [Usage Guide](Docs/StarLightGS_Usage_Guide.pdf).
+See the [Usage Guide](Docs/StarLightGS_Usage_Guide.md) for how to use all features of the plugin.
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Changelog
-- **1.0** — Initial release.
