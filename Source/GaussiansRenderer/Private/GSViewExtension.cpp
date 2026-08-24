@@ -137,8 +137,10 @@ void FGSViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder
 		{
 			// If relighting is disabled, then render all relightable gaussians with non-relightable gaussians
 			TSet<IGaussianSplatInterface*> AllProxies = RelightableProxies.Union(NonRelightableProxies);
-
-			GaussianSplattingPass(GraphBuilder, InView, RenderTargets, AllProxies, GPUStats.Get());
+			if (!AllProxies.IsEmpty())
+			{
+				GaussianSplattingPass(GraphBuilder, InView, RenderTargets, AllProxies, GPUStats.Get());
+			}
 		}
 		else
 		{
