@@ -30,7 +30,9 @@ To install:
 3. Open the generated `.sln` (`.slnx` from UE 5.8 onwards).
 4. Build and run from visual studio.
 ## 2. PLY File Requirements
-All 3DGS models in PLY format should work with this plugin. However, certain properties are required for a PLY to support relighting, which not all PLY files will provide.
+All 3DGS models in PLY format should work with this plugin. However, certain properties are required for a PLY to support relighting, which not all PLY files will provide. 
+
+Where a table shows `[A|B]`, that means that the importer will accept a value of either `A` or `B`. You should not mix conventions - e.g., if you use `f_dc_0`, then you should also use `f_dc_1` and `f_dc_2`. Similarly, if `red` is a `uint8`, then `green` and `blue` must also be `uint8`.
 
 ### Required Properties
 These are mandatory fields that any PLY must have to be able to be imported as a Gaussian Splat asset. Note that these properties do not facilitate relighting support.
