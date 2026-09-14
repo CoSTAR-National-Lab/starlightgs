@@ -35,10 +35,11 @@ void UGSWorldSubsystem::AddClippingVolume(const AGaussianSplatClippingVolume* Cl
 void UGSWorldSubsystem::RemoveClippingVolume(const AGaussianSplatClippingVolume* ClippingVolume)
 {
 	check(IsInGameThread() || IsInParallelGameThread());
-	check(ClippingVolumes.Contains(ClippingVolume));
-
-	ClippingVolumes.Remove(ClippingVolume);
-	bClippingVolumesDirty = true;
+	if (ClippingVolumes.Contains(ClippingVolume))
+	{
+		ClippingVolumes.Remove(ClippingVolume);
+		bClippingVolumesDirty = true;
+	}
 }
 
 TArray<FGSClippingVolumeProxy> UGSWorldSubsystem::BuildClippingVolumeProxies()
