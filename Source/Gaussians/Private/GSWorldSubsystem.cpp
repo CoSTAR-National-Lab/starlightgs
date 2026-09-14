@@ -25,7 +25,7 @@ void UGSWorldSubsystem::AddClippingVolume(const AGaussianSplatClippingVolume* Cl
 {
 	check(IsInGameThread() || IsInParallelGameThread());
 
-	if (!ClippingVolumes.Contains(ClippingVolume))
+	if (ClippingVolume && !ClippingVolumes.Contains(ClippingVolume))
 	{
 		ClippingVolumes.Add(ClippingVolume);
 		bClippingVolumesDirty = true;
@@ -35,7 +35,8 @@ void UGSWorldSubsystem::AddClippingVolume(const AGaussianSplatClippingVolume* Cl
 void UGSWorldSubsystem::RemoveClippingVolume(const AGaussianSplatClippingVolume* ClippingVolume)
 {
 	check(IsInGameThread() || IsInParallelGameThread());
-	if (ClippingVolumes.Contains(ClippingVolume))
+
+	if (ClippingVolume && ClippingVolumes.Contains(ClippingVolume))
 	{
 		ClippingVolumes.Remove(ClippingVolume);
 		bClippingVolumesDirty = true;
@@ -44,13 +45,12 @@ void UGSWorldSubsystem::RemoveClippingVolume(const AGaussianSplatClippingVolume*
 
 TArray<FGSClippingVolumeProxy> UGSWorldSubsystem::BuildClippingVolumeProxies()
 {
-
 	TArray<FGSClippingVolumeProxy> OutProxies;
 	OutProxies.SetNum(ClippingVolumes.Num());
 
 	for (int32 Index = 0; Index < ClippingVolumes.Num(); Index++)
 	{
-		if (!ClippingVolumes[Index]->bEnabled)
+		if (!ClippingVolumes[Index] || !ClippingVolumes[Index]->bEnabled)
 			continue;
 
 		ClippingVolumes[Index]->PopulateClippingVolumeProxy(OutProxies[Index]);

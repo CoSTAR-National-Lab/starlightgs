@@ -107,9 +107,11 @@ void FGSViewExtension::GSCullingPass(
 			auto WritePtr = ClippingVolumeShaderData;
 			for (const auto& Volume : RelevantCullingVolumes)
 			{
-				WritePtr->Min = static_cast<FVector3f>(Volume->Bounds.Min);
-				WritePtr->Max = static_cast<FVector3f>(Volume->Bounds.Max);
+				WritePtr->Origin = static_cast<FVector3f>(Volume->OrientedBounds.Center);
 				WritePtr->Mode = ConvertClippingMode(Volume->Mode);
+				WritePtr->AxisX_HalfExtentX = FVector4f{ static_cast<FVector3f>(Volume->OrientedBounds.AxisX), static_cast<float>(Volume->OrientedBounds.ExtentX) };
+				WritePtr->AxisY_HalfExtentY = FVector4f{ static_cast<FVector3f>(Volume->OrientedBounds.AxisY), static_cast<float>(Volume->OrientedBounds.ExtentY) };
+				WritePtr->AxisZ_HalfExtentZ = FVector4f{ static_cast<FVector3f>(Volume->OrientedBounds.AxisZ), static_cast<float>(Volume->OrientedBounds.ExtentZ) };
 
 				WritePtr++;
 			}

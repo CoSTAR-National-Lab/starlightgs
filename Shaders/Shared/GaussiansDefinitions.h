@@ -10,10 +10,12 @@ namespace UE::HLSL
 
 struct FGaussians_ClippingVolume
 {
-	float3 Min;
+	float3 Origin;
 	uint Mode;
-	float3 Max;
-	uint Padding;
+
+	float4 AxisX_HalfExtentX;
+	float4 AxisY_HalfExtentY;
+	float4 AxisZ_HalfExtentZ;
 };
 
 #define GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ALL  0

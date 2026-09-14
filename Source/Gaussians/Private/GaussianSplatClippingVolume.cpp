@@ -62,7 +62,20 @@ void AGaussianSplatClippingVolume::PopulateClippingVolumeProxy(FGSClippingVolume
 {
 	OutProxy.Mode = Mode;
 	OutProxy.Priority = Priority;
-	OutProxy.Bounds = GetBounds().GetBox();
+
+	// Build oriented bounds
+	OutProxy.OrientedBounds.Center = GetActorLocation();
+
+	auto Scale = GetActorRelativeScale3D();
+	// Convert from scale to extent by multiplying by 100
+	OutProxy.OrientedBounds.ExtentX = 100.0f * Scale.X;
+	OutProxy.OrientedBounds.ExtentY = 100.0f * Scale.Y;
+	OutProxy.OrientedBounds.ExtentZ = 100.0f * Scale.Z;
+
+	OutProxy.OrientedBounds.AxisX = GetActorForwardVector();
+	OutProxy.OrientedBounds.AxisY = GetActorRightVector();
+	OutProxy.OrientedBounds.AxisZ = GetActorUpVector();
+
 	OutProxy.Tags = ClippingTags;
 	OutProxy.bExactMatchOnly = bClippingTagsExactMatchOnly;
 }

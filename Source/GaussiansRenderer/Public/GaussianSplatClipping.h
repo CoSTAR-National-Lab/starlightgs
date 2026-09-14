@@ -22,7 +22,8 @@ struct GAUSSIANSRENDERER_API FGSClippingVolumeProxy
 	EGaussianSplatClippingVolumeMode Mode = EGaussianSplatClippingVolumeMode::ClipAllInside;
 	int32 Priority = 0;
 
-	FBox Bounds{ };
+	// OBB of clipping volume
+	FOrientedBox OrientedBounds{ };
 
 	FGameplayTagContainer Tags{ };
 	bool bExactMatchOnly = false;
