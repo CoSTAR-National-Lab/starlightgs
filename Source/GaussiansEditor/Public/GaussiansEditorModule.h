@@ -9,11 +9,17 @@
 
 DECLARE_LOG_CATEGORY_EXTERN(LogGSplatEditor, Log, All)
 
+class AGaussianSplatClippingVolume;
+
+
 class FGaussiansEditor : public FDefaultModuleImpl
 {
 public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
+
+private:
+	static void OnClippingVolumeNeedsBrushRebuild(AGaussianSplatClippingVolume* ClippingVolume);
 
 protected:
 	TSharedPtr<FGSplatAssetTypeActions> GSplatAssetTypeActions;

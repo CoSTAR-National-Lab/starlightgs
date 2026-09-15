@@ -98,12 +98,37 @@ bool OBBContainsOBB(FOrientedBoundingBox Outer, FOrientedBoundingBox Inner)
 // 0 -> no intersection
 // 1 -> partial intersection
 // 2 -> A is completely enveloped by B
-int OBBIntersectionTest(FOrientedBoundingBox A, FOrientedBoundingBox B)
+int OBBvsOBBIntersectionTest(FOrientedBoundingBox A, FOrientedBoundingBox B)
 {
 	if (OBBContainsOBB(B, A))
 		return 2; // check containment first (implies overlap)
 	if (!OBBsOverlap(A, B))
 		return 0;
+	return 1;
+}
+
+//   0 -> sphere and OBB do not intersect
+//   1 -> partial intersection
+//   2 -> OBB is wholly contained by the sphere
+int SphereOBBIntersection(float3 SphereCenter, float SphereRadius, FOrientedBoundingBox OBB)
+{
+	float3 D = SphereCenter - OBB.Origin;
+	float3 L;
+	L.x = dot(D, OBB.Axes[0]);
+	L.y = dot(D, OBB.Axes[1]);
+	L.z = dot(D, OBB.Axes[2]);
+
+	float3 A = abs(L);
+	float rSq = SphereRadius * SphereRadius;
+
+	float3 Far = A + OBB.HalfExtents;
+	if (dot(Far, Far) <= rSq)
+		return 2;
+
+	float3 Diff = max(A - OBB.HalfExtents, 0.0);
+	if (dot(Diff, Diff) > rSq)
+		return 0;
+
 	return 1;
 }
 
@@ -139,8 +164,11 @@ void GSplatCullingCS(uint3 GroupId : SV_GroupID, uint GroupIndex : SV_GroupIndex
 			ClippingVolumeOBB.Axes = float3x3(ClippingVolume.AxisX_HalfExtentX.xyz, ClippingVolume.AxisY_HalfExtentY.xyz, ClippingVolume.AxisZ_HalfExtentZ.xyz);
 			ClippingVolumeOBB.HalfExtents = float3(ClippingVolume.AxisX_HalfExtentX.w, ClippingVolume.AxisY_HalfExtentY.w, ClippingVolume.AxisZ_HalfExtentZ.w);
 
-			int Intersection = OBBIntersectionTest(SplatOBB, ClippingVolumeOBB);
-			switch (ClippingVolume.Mode)
+			int Intersection = (ClippingVolume.GetShape() == GAUSSIANS_CLIPPING_SHAPE_BOX)
+				? OBBvsOBBIntersectionTest(SplatOBB, ClippingVolumeOBB)
+				: SphereOBBIntersection(ClippingVolumeOBB.Origin, ClippingVolumeOBB.HalfExtents.x, SplatOBB);
+
+			switch (ClippingVolume.GetMode())
 			{
 				case GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ALL:
 					bVisible &= Intersection < 2; // Visible if splat is not entirely inside volume
