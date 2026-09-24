@@ -59,7 +59,8 @@ void UNiagaraDataInterfaceFrostingData::PostInitProperties()
     }
 }
 
-void UNiagaraDataInterfaceFrostingData::GetFunctions(TArray<FNiagaraFunctionSignature>& OutFunctions)
+#if WITH_EDITORONLY_DATA
+void UNiagaraDataInterfaceFrostingData::GetFunctionsInternal(TArray<FNiagaraFunctionSignature>& OutFunctions) const
 {
     {
         FNiagaraFunctionSignature Sig;
@@ -140,6 +141,7 @@ void UNiagaraDataInterfaceFrostingData::GetFunctions(TArray<FNiagaraFunctionSign
             OutFunctions.Add(Sig);
     }
 };
+#endif
 
 
 void UNiagaraDataInterfaceFrostingData::GetVMExternalFunction(const FVMExternalFunctionBindingInfo& BindingInfo, void* InstanceData, FVMExternalFunction& OutFunc)
@@ -155,7 +157,7 @@ void UNiagaraDataInterfaceFrostingData::GetVMExternalFunction(const FVMExternalF
     }
 }
 
-#ifdef WITH_EDITORONLY_DATA
+#if WITH_EDITORONLY_DATA
 bool UNiagaraDataInterfaceFrostingData::AppendCompileHash(FNiagaraCompileHashVisitor* InVisitor) const
 {
     if (!Super::AppendCompileHash(InVisitor))

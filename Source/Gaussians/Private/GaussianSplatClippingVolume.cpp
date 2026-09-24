@@ -2,8 +2,8 @@
 
 #include "GSClippingVolumeRebuildService.h"
 #include "GSWorldSubsystem.h"
-#include "Builders/CubeBuilder.h"
-#include "Builders/TetrahedronBuilder.h"
+//#include "Builders/CubeBuilder.h"
+//#include "Builders/TetrahedronBuilder.h"
 #include "Components/BrushComponent.h"
 
 

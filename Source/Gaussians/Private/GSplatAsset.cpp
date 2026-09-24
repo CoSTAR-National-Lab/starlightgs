@@ -93,7 +93,6 @@ void UGSplatAsset::GetAssetRegistryTags(FAssetRegistryTagsContext Context) const
 	}
 #endif
 }
-
 #endif
 
 void UGSplatAsset::RecalculateBounds()

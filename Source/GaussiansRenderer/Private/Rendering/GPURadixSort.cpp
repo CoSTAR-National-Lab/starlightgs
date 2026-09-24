@@ -25,7 +25,7 @@
 #define MAX_PASS_COUNT (32 / RADIX_BITS)
 
 
-void SetRadixSortShaderCompilerEnvironment(FShaderCompilerEnvironment& OutEnvironment)
+void SetRadixSortShaderCompilerEnvironment1(FShaderCompilerEnvironment& OutEnvironment)
 {
 	OutEnvironment.SetDefine(TEXT("RADIX_BITS"), RADIX_BITS);
 	OutEnvironment.SetDefine(TEXT("THREAD_COUNT"), THREAD_COUNT);
@@ -64,7 +64,7 @@ public:
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.SetDefine(TEXT("RADIX_SORT_POPULATE_PARAMETERS"), 1);
-		SetRadixSortShaderCompilerEnvironment(OutEnvironment);
+		SetRadixSortShaderCompilerEnvironment1(OutEnvironment);
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FGPURadixSortPopulateParametersCS, "/Plugin/StarLightGS/RadixSort.usf", "RadixSortPopulateParametersCS", SF_Compute)
@@ -83,7 +83,7 @@ public:
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.SetDefine(TEXT("RADIX_SORT_CLEAR_OFFSETS"), 1);
-		SetRadixSortShaderCompilerEnvironment(OutEnvironment);
+		SetRadixSortShaderCompilerEnvironment1(OutEnvironment);
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FGPURadixSortClearOffsetsCS, "/Plugin/StarLightGS/RadixSort.usf", "RadixSortClearOffsetsCS", SF_Compute)
@@ -111,7 +111,7 @@ public:
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.SetDefine(TEXT("RADIX_SORT_UPSWEEP"), 1);
-		SetRadixSortShaderCompilerEnvironment(OutEnvironment);
+		SetRadixSortShaderCompilerEnvironment1(OutEnvironment);
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FGPURadixSortUpsweepCS, "/Plugin/StarLightGS/RadixSort.usf", "RadixSortUpsweepCS", SF_Compute)
@@ -131,7 +131,7 @@ public:
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.SetDefine(TEXT("RADIX_SORT_SPINE"), 1);
-		SetRadixSortShaderCompilerEnvironment(OutEnvironment);
+		SetRadixSortShaderCompilerEnvironment1(OutEnvironment);
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FGPURadixSortSpineCS, "/Plugin/StarLightGS/RadixSort.usf", "RadixSortSpineCS", SF_Compute)
@@ -165,7 +165,7 @@ public:
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.SetDefine(TEXT("RADIX_SORT_DOWNSWEEP"), 1);
-		SetRadixSortShaderCompilerEnvironment(OutEnvironment);
+		SetRadixSortShaderCompilerEnvironment1(OutEnvironment);
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FGPURadixSortDownsweepCS, "/Plugin/StarLightGS/RadixSort.usf", "RadixSortDownsweepCS", SF_Compute)

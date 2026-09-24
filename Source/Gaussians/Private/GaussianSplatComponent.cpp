@@ -81,7 +81,7 @@ void UGaussianSplatComponent::OnRegister()
 		GaussianSplatAsset->OnAssetUpdate.AddDynamic(this, &UGaussianSplatComponent::OnAssetUpdated);
 	}
 
-	#ifdef WITH_EDITOR
+	#if WITH_EDITOR
 	if (SpriteTexture && SpriteComponent)
 	{
 		SpriteComponent->SetSprite(SpriteTexture);

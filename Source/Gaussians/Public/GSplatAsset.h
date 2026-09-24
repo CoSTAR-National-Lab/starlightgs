@@ -52,8 +52,9 @@ public:
 	virtual void PostInitProperties() override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
-#endif
 	virtual void GetAssetRegistryTags(FAssetRegistryTagsContext Context) const override;
+#endif
+
 	//~ End UObject Interface
 
 

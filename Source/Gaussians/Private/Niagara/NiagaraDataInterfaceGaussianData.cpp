@@ -59,7 +59,8 @@ void UNiagaraDataInterfaceGaussianData::PostInitProperties()
     }
 }
 
-void UNiagaraDataInterfaceGaussianData::GetFunctions(TArray<FNiagaraFunctionSignature>& OutFunctions)
+#if WITH_EDITORONLY_DATA
+void UNiagaraDataInterfaceGaussianData::GetFunctionsInternal(TArray<FNiagaraFunctionSignature>& OutFunctions) const
 {
     {
         FNiagaraFunctionSignature Sig;
@@ -105,6 +106,7 @@ void UNiagaraDataInterfaceGaussianData::GetFunctions(TArray<FNiagaraFunctionSign
 	    OutFunctions.Add(Sig);
     }
 };
+#endif
 
 
 void UNiagaraDataInterfaceGaussianData::GetVMExternalFunction(const FVMExternalFunctionBindingInfo& BindingInfo, void* InstanceData, FVMExternalFunction& OutFunc)
@@ -120,7 +122,7 @@ void UNiagaraDataInterfaceGaussianData::GetVMExternalFunction(const FVMExternalF
     }
 }
 
-#ifdef WITH_EDITORONLY_DATA
+#if WITH_EDITORONLY_DATA
 bool UNiagaraDataInterfaceGaussianData::AppendCompileHash(FNiagaraCompileHashVisitor* InVisitor) const
 {
     if (!Super::AppendCompileHash(InVisitor))
