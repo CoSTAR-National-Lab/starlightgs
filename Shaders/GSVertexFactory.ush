@@ -174,16 +174,29 @@ ComputeSplatParameters(
 
     if (IsOrthoProjection(ViewToClip))
     {
-        float3x3 W = transpose((float3x3) TranslatedWorldToView); 
-        float3x3 covView = mul(W, mul(Covariance3D, transpose(W)));
+        //float3x3 W = transpose((float3x3) TranslatedWorldToView); 
+        //float3x3 covView = mul(W, mul(Covariance3D, transpose(W)));
 
-        float X = covView[0][0];
-        float Y = covView[1][1];
+        //100 uuscale
+        //128 size of smallest VSM page
+
+        float3x3 ImMakingShitUpViewMatrix = float3x3(
+        float3(100.f / 128.f, 0,0),
+        float3(0, 100.f / 128.f,0),
+        float3(0,0, 100.f)
+		);
+
+
+        float3x3 JW = mul(ImMakingShitUpViewMatrix, transpose((float3x3) TranslatedWorldToView));
+        float3x3 covView = mul(JW, mul(transpose(Covariance3D), transpose(JW)));
+
+        float X = covView[0][0]         ;
+        float Y = covView[1][1]         ;
         float Covariance = covView[0][1];
 
 		// Determine conic for the splat
         float Determinant = X * Y - Covariance * Covariance;
-        float3 Conic = float3(Y, Covariance, X) / Determinant; 
+        float3 Conic = float3(X, Covariance, Y) / Determinant; 
 
         float Mid = (X + Y);
         float Delta = length(float2((X - Y), (2 * Covariance)));
@@ -196,8 +209,8 @@ ComputeSplatParameters(
         OutWorldPosition = float4(0, 0, 0, 0);
         //OutSvPosition = float2(0, 0);
         //OutMeanScreenPosition = float2(0, 0);
-        OutConic = float3(0, 0, 0);
-        OutWorldNormal = float3(0, 0, 0);
+        //OutConic = float3(0, 0, 0);
+        //OutWorldNormal = float3(0, 0, 0);
 
         if (Lambda2 > 0.0f)
         {
@@ -236,7 +249,7 @@ ComputeSplatParameters(
        	  ViewPosition.xyz *= 0.01f;
 
 		  SplatZScale = ViewPosition.z / (ViewPosition.w);
-       	  SplatZScale = SplatZScale;// * 0.5;
+
 
        	  // Calculate Jacobian matrix based off of projection matrix
        	  // // Perspective jacobian calculation based off of https://jtstephens18.github.io/posts/Building-a-Gaussian-Splatting-Renderer-In-OpenGL/
@@ -268,7 +281,7 @@ ComputeSplatParameters(
 
 			  // Determine conic for the splat
               float Determinant = X * Y - Covariance * Covariance;
-              float3 Conic = float3(Y, Covariance, X) / Determinant;
+              float3 Conic = float3(X, Covariance, Y) / Determinant;
 
               float Mid = (X + Y);
               float Delta = length(float2((X - Y), (2 * Covariance)));
@@ -305,10 +318,9 @@ ComputeSplatParameters(
           	float3x3 CamM = (float3x3) ViewToTranslatedWorld;
 			//View Space is Local Space
           	worldOffset.xyz = mul(worldOffset.xyz, CamM);
-          	worldOffset.xyz = worldOffset.xyz * 0.5;
             worldOffset /= worldOffset.w;
 
-           	//worldOffset = DFTransformLocalToTranslatedWorld(worldOffset.xyz, Primitive.LocalToWorld, ResolvedView.PreViewTranslation);
+           	//worldOffset = DFTransformLocalToTranslatedWorld(worldOffset.xyz, b Primitive.LocalToWorld, ResolvedView.PreViewTranslation);
 
 			//OutSvPosition = float2(0, 0);
           	//OutMeanScreenPosition = float2(0, 0);
@@ -335,15 +347,6 @@ ComputeSplatParameters(
             OutWorldNormal = RotateLocalToWorld(GSResources.Normals[SplatIndex], Primitive.LocalToWorld, Primitive.InvNonUniformScale);
 		}
     }
-
-	
- //   {
- //       // Set this to be an invalid primitive so it is culled (if every vertex is positioned at 0 then it will effectively be culled)
-	//	OutWorldPosition = 0.0f;
-	//	//OutMeanScreenPosition = 0.0f;
-	//	OutConic = 0.0f;
-	//	OutWorldNormal = 0.0f;
-	//}
 }
 
 /** Attributes to interpolate from the vertex shader to the pixel shader. */
@@ -646,10 +649,7 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(FVertexFacto
 	// Really only the last two components of the packed UVs have the opportunity to be uninitialized
     Interpolants = (FVertexFactoryInterpolantsVSToPS) 0;
 
-	Interpolants.Conic = float3(-0.5 * Intermediates.Conic.x, -Intermediates.Conic.y, -0.5 * Intermediates.Conic.z);
-	//Interpolants.Conic = float3(Intermediates.Conic.x, Intermediates.Conic.y, Intermediates.Conic.z);
-	//Interpolants.VertexSvPosition = Intermediates.VertexSvPosition;
-	//Interpolants.MeanScreenSpacePosition = Intermediates.MeanScreenSpacePosition;
+	Interpolants.Conic = Intermediates.Conic;
     Interpolants.Opacity = Intermediates.Opacity;
 
 #if NUM_TEX_COORD_INTERPOLATORS
@@ -665,6 +665,12 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(FVertexFacto
 #endif
 
     return Interpolants;
+}
+
+float EvaluateGaussian2D_Normalized3Sigma(float2 UV, float3 cov)
+{
+    float quad = 9 * (cov.z * UV.x * UV.x - 2.0f * cov.y * UV.x * UV.y + cov.x * UV.y * UV.y);
+    return exp(-0.5f * quad);
 }
 
 /** Converts from vertex factory specific interpolants to a FMaterialPixelParameters, which is used by material inputs. */
@@ -684,13 +690,17 @@ FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVS
 	float Power = 1.f-length(UV);
 	//float2 DistanceFromMean = (Interpolants.MeanScreenSpacePosition.xy - Interpolants.VertexSvPosition.xy);
     //float Power = dot(Interpolants.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
-    float Alpha = Power * Interpolants.Opacity;
+    //float Alpha = Power * Interpolants.Opacity;
 
-    SvPosition.z -= Alpha * 0.00005;
+    float Alpha = EvaluateGaussian2D_Normalized3Sigma((Result.TexCoords[0] - 0.5)*2.f, Interpolants.Conic) * Interpolants.Opacity;
+
+    //SvPosition.z*= Alpha * 1000000.f;
+    //SvPosition.z *= 0.0001;
+    //SvPosition.z -= Alpha * 0.01;
 #endif	//NUM_MATERIAL_TEXCOORDS
 
 	//Result.VertexColor = float4(Alpha, 1, 1, 1);
-	Result.VertexColor = float4(Interpolants.Conic.xyz, Interpolants.Opacity);
+	Result.VertexColor = float4(Interpolants.Conic, Interpolants.Opacity);
     Result.PrimitiveId = GetPrimitiveId(Interpolants);
       
     return Result;

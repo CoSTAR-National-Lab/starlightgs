@@ -66,6 +66,8 @@ void UGaussianSplatComponent::PostEditChangeProperty(struct FPropertyChangedEven
 	{
 		SpriteComponent->SetSprite(SpriteTexture);
 	}
+
+
 }
 #endif
 
@@ -79,7 +81,7 @@ void UGaussianSplatComponent::OnRegister()
 		GaussianSplatAsset->OnAssetUpdate.AddDynamic(this, &UGaussianSplatComponent::OnAssetUpdated);
 	}
 
-	#ifdef WITH_EDITORONLY_DATA
+	#ifdef WITH_EDITOR
 	if (SpriteTexture && SpriteComponent)
 	{
 		SpriteComponent->SetSprite(SpriteTexture);
@@ -97,12 +99,15 @@ void UGaussianSplatComponent::OnUnregister()
 	}
 }
 
+#if WITH_EDITOR
 void UGaussianSplatComponent::PostEditComponentMove(bool bFinished)
 {
 	Super::PostEditComponentMove(bFinished);
 
 	MarkRenderStateDirty();
 }
+#endif
+
 
 FPrimitiveSceneProxy* UGaussianSplatComponent::CreateSceneProxy()
 {
