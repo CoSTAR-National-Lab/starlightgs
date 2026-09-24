@@ -353,6 +353,10 @@ bool GSplatImporter::ImportPly(const UGSplatImportData& ImportData, happly::PLYD
 			sho[i].Z = FMath::Pow(sho[i].Z, 2.2f);
 		}
 
+		sho[i].X = FMath::Max(sho[i].X, 0.0f);
+		sho[i].Y = FMath::Max(sho[i].Y, 0.0f);
+		sho[i].Z = FMath::Max(sho[i].Z, 0.0f);
+
 		if (bCompressedOpacity)
 		{
 			sho[i].W = static_cast<float>(opacity_uchar[i]) / 255.0f;

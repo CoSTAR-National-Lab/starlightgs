@@ -9,7 +9,7 @@ UGaussianSplatComponent::UGaussianSplatComponent()
 {
 	static ConstructorHelpers::FObjectFinder<UMaterial> MaterialFinder(TEXT("/StarLightGS/Materials/M_SplatShadowMaterial.M_SplatShadowMaterial"));
 	checkf(MaterialFinder.Succeeded(), TEXT("Could not find asset - plugin is not installed correctly."));
-	SplatMaterial = MaterialFinder.Object;
+	ShadowMaterial = MaterialFinder.Object;
 
 	ClippingTags.AddTag(UGameplayTagsManager::Get().RequestGameplayTag("StarLightGS.CullingVolumes.Default", false));
 
@@ -42,9 +42,9 @@ void UGaussianSplatComponent::PostEditChangeProperty(struct FPropertyChangedEven
 	{
 		bCullingDirty = true;
 
-		if (PrevGaussianSplatAsset)
+		if (auto Prev = PrevGaussianSplatAsset.Pin())
 		{
-			PrevGaussianSplatAsset->OnAssetUpdate.RemoveDynamic(this, &UGaussianSplatComponent::OnAssetUpdated);
+			Prev->OnAssetUpdate.RemoveDynamic(this, &UGaussianSplatComponent::OnAssetUpdated);
 		}
 		PrevGaussianSplatAsset = GaussianSplatAsset;
 		if (GaussianSplatAsset)
@@ -134,8 +134,8 @@ void UGaussianSplatComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutM
 	Super::GetUsedMaterials(OutMaterials, bGetDebugMaterials);
 	
 	//register material used for splats if any, this will propagate to proxy and permute shader with custom vertex factory.
-	if (SplatMaterial)
-		OutMaterials.Add(SplatMaterial);
+	if (ShadowMaterial)
+		OutMaterials.Add(ShadowMaterial);
 }
 
 void UGaussianSplatComponent::ExportClippedSplat()

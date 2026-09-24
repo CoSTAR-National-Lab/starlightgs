@@ -23,17 +23,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Gaussian Splats")
 	float SplatScaleMultiplier = 1.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats")
-	UMaterial* SplatMaterial;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats", AdvancedDisplay)
+	UMaterialInterface* ShadowMaterial;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats|Clipping", DisplayName="Tags")
 	FGameplayTagContainer ClippingTags;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats|Clipping", DisplayName="Exact Match Only")
 	bool bClippingTagsExactMatchOnly = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gaussian Splats", AdvancedDisplay)
-	bool bForceDrawVertexFactoryInMainPass = false;
 
 public:
 
@@ -57,7 +54,7 @@ public:
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 	//~ End UPrimitiveComponent Interface
 
-	UFUNCTION(Category="Default", CallInEditor)
+	UFUNCTION(Category="Gaussian Splats", CallInEditor, DisplayName="Export Clipped Splat")
 	void ExportClippedSplat();
 
 private:
@@ -65,7 +62,7 @@ private:
 	void OnAssetUpdated();
 
 private:
-	TObjectPtr<UGSplatAsset> PrevGaussianSplatAsset = nullptr;
+	TWeakObjectPtr<UGSplatAsset> PrevGaussianSplatAsset = nullptr;
 
 #if WITH_EDITORONLY_DATA
 	UPROPERTY()

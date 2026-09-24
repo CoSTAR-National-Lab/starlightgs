@@ -23,7 +23,7 @@ FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(const UGaussianSplatComponent
 		GaussianSplatResource_RenderThread = InComponent->GaussianSplatAsset->GetOrCreateResource();
 	}
 
-	ShadowMaterialProxy = InComponent->SplatMaterial ? InComponent->SplatMaterial->GetRenderProxy() : nullptr;
+	ShadowMaterialProxy = InComponent->ShadowMaterial ? InComponent->ShadowMaterial->GetRenderProxy() : nullptr;
 
 	// Get view extension from world subsystem
 	if (UWorld* World = InComponent->GetWorld())

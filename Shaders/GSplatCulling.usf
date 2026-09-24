@@ -19,13 +19,117 @@ StructuredBuffer<FGaussians_ClippingVolume> ClippingVolumes;
 float SplatScaleMultiplier;
 
 
-float3x3 VecToScaleMatrix(in float3 Scale)
+struct FOrientedBoundingBox
 {
-	return float3x3(
-		Scale.x, 0.0f, 0.0f,
-		0.0f, Scale.y, 0.0f,
-		0.0f, 0.0f, Scale.z
-	);
+	float3 Origin;
+	float3 HalfExtents;
+	float3x3 Axes;
+};
+
+// OBB intersection test helpers
+float OBBProjectionRadius(FOrientedBoundingBox Box, float3 L)
+{
+	return abs(dot(L, Box.Axes[0])) * Box.HalfExtents.x +
+           abs(dot(L, Box.Axes[1])) * Box.HalfExtents.y +
+           abs(dot(L, Box.Axes[2])) * Box.HalfExtents.z;
+}
+
+bool OBBsSeparatedOnAxis(float3 L, FOrientedBoundingBox A, FOrientedBoundingBox B)
+{
+	float CenterDist = abs(dot(L, B.Origin - A.Origin));
+	float ProjRadius = OBBProjectionRadius(A, L) + OBBProjectionRadius(B, L);
+	return CenterDist > ProjRadius;
+}
+
+bool OBBsOverlap(FOrientedBoundingBox A, FOrientedBoundingBox B)
+{
+    // 3 axes of A
+	if (OBBsSeparatedOnAxis(A.Axes[0], A, B))
+		return false;
+	if (OBBsSeparatedOnAxis(A.Axes[1], A, B))
+		return false;
+	if (OBBsSeparatedOnAxis(A.Axes[2], A, B))
+		return false;
+
+    // 3 axes of B
+	if (OBBsSeparatedOnAxis(B.Axes[0], A, B))
+		return false;
+	if (OBBsSeparatedOnAxis(B.Axes[1], A, B))
+		return false;
+	if (OBBsSeparatedOnAxis(B.Axes[2], A, B))
+		return false;
+		
+    // 9 cross-product axes (skip near-degenerate pairs of parallel axes)
+	const float kMinLenSq = 1e-8f;
+    [unroll]
+	for (int i = 0; i < 3; ++i)
+	{
+        [unroll]
+		for (int j = 0; j < 3; ++j)
+		{
+			float3 L = cross(A.Axes[i], B.Axes[j]);
+			float LenSq = dot(L, L);
+			if (LenSq > kMinLenSq)
+			{
+				L *= rsqrt(LenSq);
+				if (OBBsSeparatedOnAxis(L, A, B))
+					return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool OBBContainsOBB(FOrientedBoundingBox Outer, FOrientedBoundingBox Inner)
+{
+	float3 D = Inner.Origin - Outer.Origin;
+
+	if (abs(dot(D, Outer.Axes[0])) + OBBProjectionRadius(Inner, Outer.Axes[0]) > Outer.HalfExtents.x)
+		return false;
+	if (abs(dot(D, Outer.Axes[1])) + OBBProjectionRadius(Inner, Outer.Axes[1]) > Outer.HalfExtents.y)
+		return false;
+	if (abs(dot(D, Outer.Axes[2])) + OBBProjectionRadius(Inner, Outer.Axes[2]) > Outer.HalfExtents.z)
+		return false;
+
+	return true;
+}
+
+// 0 -> no intersection
+// 1 -> partial intersection
+// 2 -> A is completely enveloped by B
+int OBBvsOBBIntersectionTest(FOrientedBoundingBox A, FOrientedBoundingBox B)
+{
+	if (OBBContainsOBB(B, A))
+		return 2; // check containment first (implies overlap)
+	if (!OBBsOverlap(A, B))
+		return 0;
+	return 1;
+}
+
+//   0 -> sphere and OBB do not intersect
+//   1 -> partial intersection
+//   2 -> OBB is wholly contained by the sphere
+int SphereOBBIntersection(float3 SphereCenter, float SphereRadius, FOrientedBoundingBox OBB)
+{
+	float3 D = SphereCenter - OBB.Origin;
+	float3 L;
+	L.x = dot(D, OBB.Axes[0]);
+	L.y = dot(D, OBB.Axes[1]);
+	L.z = dot(D, OBB.Axes[2]);
+
+	float3 A = abs(L);
+	float rSq = SphereRadius * SphereRadius;
+
+	float3 Far = A + OBB.HalfExtents;
+	if (dot(Far, Far) <= rSq)
+		return 2;
+
+	float3 Diff = max(A - OBB.HalfExtents, 0.0);
+	if (dot(Diff, Diff) > rSq)
+		return 0;
+
+	return 1;
 }
 
 
@@ -42,37 +146,12 @@ void GSplatCullingCS(uint3 GroupId : SV_GroupID, uint GroupIndex : SV_GroupIndex
 		float3 LocalPosition = GSResources.Positions[SplatIndex];
 		float4 TranslatedWorldPosition = DFTransformLocalToTranslatedWorld(LocalPosition, MakeDFMatrix4x3(Primitive.PositionHigh, Primitive.LocalToRelativeWorld), MakeDFVector3(0, 0));
 
-		float3x3 ScaleMatrix = VecToScaleMatrix(GSResources.Scales[SplatIndex] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz * SplatScaleMultiplier);
-		float3x3 RotationMatrix = mul((float3x3) Primitive.RelativeWorldToLocal, QuatToMatrix(GSResources.Orientations[SplatIndex]));
-
-		// Calculate covariance matrix
-		float3x3 T = mul(RotationMatrix, ScaleMatrix);
-		float3x3 Covariance3D = mul(T, transpose(T));
-
-		// Power iteration to find the largest eigenvalue
-		float3 v = float3(1.0f, 0.0f, 0.0f);
-		float MajorEigenvalue = 0.0f;
-
-		UNROLL
-		for (int i = 0; i < 4; ++i)
-		{
-			v = mul(v, Covariance3D);
-			float v_length = length(v);
-			if (v_length > 1e-6)
-			{
-				v = v / v_length;
-
-				MajorEigenvalue = v_length;
-			}
-		}
-
-		// Compute a safe box extent for frustum culling (original 3DGS paper used same radius):
-		// = 3.0f * sqrt(major_variance)
-		// Factor of 100 converts back to Unreal units
-		float3 WorldSpaceExtent = 300.0f * sqrt(MajorEigenvalue);
-
-		float3 SplatMin = TranslatedWorldPosition.xyz - WorldSpaceExtent;
-		float3 SplatMax = TranslatedWorldPosition.xyz + WorldSpaceExtent;
+		FOrientedBoundingBox SplatOBB;
+		SplatOBB.Origin = TranslatedWorldPosition.xyz;
+		SplatOBB.Axes = mul((float3x3) Primitive.RelativeWorldToLocal, QuatToMatrix(GSResources.Orientations[SplatIndex]));
+		// 3 standard deviations of the gaussian included to capture 99.7% of volume
+		// Factor of 100 to convert to Unreal units
+		SplatOBB.HalfExtents = 300.0f * GSResources.Scales[SplatIndex] * Primitive.NonUniformScale.xyz * Primitive.NonUniformScale.xyz * SplatScaleMultiplier;
 
 		bVisible = true;
 
@@ -80,19 +159,28 @@ void GSplatCullingCS(uint3 GroupId : SV_GroupID, uint GroupIndex : SV_GroupIndex
 		{
 			FGaussians_ClippingVolume ClippingVolume = ClippingVolumes[i];
 
-			switch (ClippingVolume.Mode)
+			FOrientedBoundingBox ClippingVolumeOBB;
+			ClippingVolumeOBB.Origin = ClippingVolume.Origin;
+			ClippingVolumeOBB.Axes = float3x3(ClippingVolume.AxisX_HalfExtentX.xyz, ClippingVolume.AxisY_HalfExtentY.xyz, ClippingVolume.AxisZ_HalfExtentZ.xyz);
+			ClippingVolumeOBB.HalfExtents = float3(ClippingVolume.AxisX_HalfExtentX.w, ClippingVolume.AxisY_HalfExtentY.w, ClippingVolume.AxisZ_HalfExtentZ.w);
+
+			int Intersection = (ClippingVolume.GetShape() == GAUSSIANS_CLIPPING_SHAPE_BOX)
+				? OBBvsOBBIntersectionTest(SplatOBB, ClippingVolumeOBB)
+				: SphereOBBIntersection(ClippingVolumeOBB.Origin, ClippingVolumeOBB.HalfExtents.x, SplatOBB);
+
+			switch (ClippingVolume.GetMode())
 			{
 				case GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ALL:
-					bVisible &= !(all(SplatMin > ClippingVolume.Min) && all(SplatMax < ClippingVolume.Max));
+					bVisible &= Intersection < 2; // Visible if splat is not entirely inside volume
 					break;
 				case GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ANY:
-					bVisible &= any(SplatMax < ClippingVolume.Min) || any(SplatMin > ClippingVolume.Max);
+					bVisible &= Intersection == 0; // Visible if splat does not intersect volume at all
 					break;
 				case GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ALL:
-					bVisible &= !(any(SplatMax < ClippingVolume.Min) || any(SplatMin > ClippingVolume.Max));
+					bVisible &= Intersection > 0; // Visible if splat intersects in any way
 					break;
 				case GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ANY:
-					bVisible &= all(SplatMin > ClippingVolume.Min) && all(SplatMax < ClippingVolume.Max);
+					bVisible &= Intersection == 2; // Visible only if splat is completely contained
 					break;
 				default:
 					break;
@@ -101,7 +189,7 @@ void GSplatCullingCS(uint3 GroupId : SV_GroupID, uint GroupIndex : SV_GroupIndex
 			if (!bVisible)
 			{
 				break;
-			}
+			} 
 		}
 	}
 

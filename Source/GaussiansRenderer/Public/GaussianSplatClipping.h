@@ -15,14 +15,23 @@ enum class EGaussianSplatClippingVolumeMode : uint8
 	ClipAnyOutside    UMETA(DisplayName = "Clip Any Outside"),
 };
 
+UENUM()
+enum class EGaussianSplatClippingVolumeShape : uint8
+{
+	Box = 0,
+	Sphere
+};
+
 
 // Render thread representation of GS clipping volume
 struct GAUSSIANSRENDERER_API FGSClippingVolumeProxy
 {
 	EGaussianSplatClippingVolumeMode Mode = EGaussianSplatClippingVolumeMode::ClipAllInside;
+	EGaussianSplatClippingVolumeShape Shape = EGaussianSplatClippingVolumeShape::Box;
 	int32 Priority = 0;
 
-	FBox Bounds{ };
+	// OBB of clipping volume
+	FOrientedBox OrientedBounds{ };
 
 	FGameplayTagContainer Tags{ };
 	bool bExactMatchOnly = false;

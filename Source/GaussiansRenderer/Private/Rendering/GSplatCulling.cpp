@@ -45,13 +45,24 @@ class FGSplatCullingCS : public FGlobalShader
 IMPLEMENT_GLOBAL_SHADER(FGSplatCullingCS, "/Plugin/StarLightGS/GSplatCulling.usf", "GSplatCullingCS", SF_Compute);
 
 
-int32 ConvertClippingMode(EGaussianSplatClippingVolumeMode Mode)
+uint32 ConvertClippingMode(EGaussianSplatClippingVolumeMode Mode)
 {
 	switch (Mode) {
 	case EGaussianSplatClippingVolumeMode::ClipAnyInside:  return GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ANY;
 	case EGaussianSplatClippingVolumeMode::ClipAllInside:  return GAUSSIANS_CLIPPING_MODE_CLIP_INSIDE_ALL;
 	case EGaussianSplatClippingVolumeMode::ClipAnyOutside: return GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ANY;
 	case EGaussianSplatClippingVolumeMode::ClipAllOutside: return GAUSSIANS_CLIPPING_MODE_CLIP_OUTSIDE_ALL;
+	default:
+		checkNoEntry(); break;
+	}
+	return -1;
+}
+
+uint32 ConvertClippingShape(EGaussianSplatClippingVolumeShape Shape)
+{
+	switch (Shape) {
+	case EGaussianSplatClippingVolumeShape::Box:	return GAUSSIANS_CLIPPING_SHAPE_BOX;
+	case EGaussianSplatClippingVolumeShape::Sphere: return GAUSSIANS_CLIPPING_SHAPE_SPHERE;
 	default:
 		checkNoEntry(); break;
 	}
@@ -107,9 +118,11 @@ void FGSViewExtension::GSCullingPass(
 			auto WritePtr = ClippingVolumeShaderData;
 			for (const auto& Volume : RelevantCullingVolumes)
 			{
-				WritePtr->Min = static_cast<FVector3f>(Volume->Bounds.Min);
-				WritePtr->Max = static_cast<FVector3f>(Volume->Bounds.Max);
-				WritePtr->Mode = ConvertClippingMode(Volume->Mode);
+				WritePtr->Origin = static_cast<FVector3f>(Volume->OrientedBounds.Center);
+				WritePtr->PackModeAndShape(ConvertClippingMode(Volume->Mode), ConvertClippingShape(Volume->Shape));
+				WritePtr->AxisX_HalfExtentX = FVector4f{ static_cast<FVector3f>(Volume->OrientedBounds.AxisX), static_cast<float>(Volume->OrientedBounds.ExtentX) };
+				WritePtr->AxisY_HalfExtentY = FVector4f{ static_cast<FVector3f>(Volume->OrientedBounds.AxisY), static_cast<float>(Volume->OrientedBounds.ExtentY) };
+				WritePtr->AxisZ_HalfExtentZ = FVector4f{ static_cast<FVector3f>(Volume->OrientedBounds.AxisZ), static_cast<float>(Volume->OrientedBounds.ExtentZ) };
 
 				WritePtr++;
 			}
