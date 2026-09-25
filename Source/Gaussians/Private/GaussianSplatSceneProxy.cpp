@@ -113,15 +113,11 @@ FPrimitiveViewRelevance FGaussianSplatSceneProxy::GetViewRelevance(const FSceneV
 {
 	FPrimitiveViewRelevance Result;
 
-	Result.bDrawRelevance =
-		IsShown(View)
-		& !View->bIsGameView
-		& !View->Family->EngineShowFlags.Editor
-		& !View->Family->EngineShowFlags.Game
+	Result.bDrawRelevance = IsShown(View) & !View->bIsGameView & !View->Family->EngineShowFlags.Editor & !View->Family->EngineShowFlags.Game;
+
 #ifdef WITH_EDITOR
-		| View->Family->EngineShowFlags.HitProxies
+		Result.bDrawRelevance |= View->Family->EngineShowFlags.HitProxies;
 #endif
-	    ; 
 	
 	//Result.bDrawRelevance = View->Family->EngineShowFlags.HitProxies; //IsShown(View); //false;// ; // to draw only shadows
 

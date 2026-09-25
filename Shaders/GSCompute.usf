@@ -10,7 +10,6 @@
 
 #include "Shared/GaussiansDefinitions.h"
 
-
 #ifndef ENABLE_RELIGHTING
 #define ENABLE_RELIGHTING true
 #endif
@@ -398,16 +397,15 @@ FOutVertex GSSplatting_VS(uint GlobalVertexId : SV_VertexID, uint InstanceID : S
     return Output;
 }
 
-
 struct FRTOut
 {
-    float4 Color : SV_TARGET0;
+    float4 Color : SV_Target0;
     
 #if ENABLE_RELIGHTING
-    float4 Normal : SV_TARGET1;
-	float4 DeviceZMetallicRoughness : SV_TARGET2;
+    float4 Normal : SV_Target1;
+	float4 DeviceZMetallicRoughness : SV_Target2;
 #else
-    float4 Velocity : SV_TARGET1;
+    float4 Velocity : SV_Target1;
 	float DeviceZ : SV_Depth;
 #endif
 
