@@ -188,11 +188,11 @@ UObject* UGSplatFactory::ImportInternal(UClass* InClass, UObject* InParent, FNam
 	GEditor->GetEditorSubsystem<UImportSubsystem>()->BroadcastAssetPreImport(this, InClass, InParent, InName, Parms);
 
 	UGSplatAsset* Object = InExistingAsset ? InExistingAsset : NewObject<UGSplatAsset>(InParent, InClass, InName, Flags);
-	if (!Object->GSplatImportData)
+	if (!Object->AssetImportData)
 	{
-		Object->GSplatImportData = NewObject<UGSplatImportData>(InParent, UGSplatImportData::StaticClass());
+		Object->AssetImportData = NewObject<UGSplatImportData>(InParent, UGSplatImportData::StaticClass());
 	}
-	Object->Splats.Empty();
+	
 
 	bOutOperationCanceled = false;
 	const bool bIsUnattended = (IsAutomatedImport() || FApp::IsUnattended()
@@ -213,7 +213,7 @@ UObject* UGSplatFactory::ImportInternal(UClass* InClass, UObject* InParent, FNam
 		}
 	};
 
-	if (!GSplatImporter::ParsePly(Filename, *Object->GSplatImportData, &PlyData))
+	if (!GSplatImporter::ParsePly(Filename, *Object->AssetImportData, &PlyData))
 	{
 		UE_LOG(LogGSplatEditor, Error, TEXT("Failed to parse ply: %s"), *Filename);
 
@@ -226,15 +226,24 @@ UObject* UGSplatFactory::ImportInternal(UClass* InClass, UObject* InParent, FNam
 	// Open import dialogue for user to select options
 	if (!bIsUnattended)
 	{
-		if (!ShowGSplatImportWindow(Filename, Object->GSplatImportData))
+		if (!ShowGSplatImportWindow(Filename, Object->AssetImportData))
 		{
 			bOutOperationCanceled = true;
+
+			if (bIsReimport)
+			{
+				return Object;
+			}
+
 			return nullptr;
 		}
 	}
 
+	//Object could be existing object, only proceed with emptying when made sure we are reloading data
+	Object->Splats.Empty();
+
 	// Proceed with import, applying specified options during import
-	if (!GSplatImporter::ImportPly(*Object->GSplatImportData, PlyData, Object->Splats))
+	if (!GSplatImporter::ImportPly(*Object->AssetImportData, PlyData, Object->Splats))
 	{
 		UE_LOG(LogGSplatEditor, Error, TEXT("Failed to import ply: %s"), *Filename);
 		Object->Splats.Empty();

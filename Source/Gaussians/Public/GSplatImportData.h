@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "EditorFramework/AssetImportData.h"
 
 #include "GSplatImportData.generated.h"
 
@@ -23,7 +24,7 @@ enum class EGSplatSwizzleAxis : uint8
  * Cached with the GSplat asset so if it is reimported, the import settings can be recovered
  */
 UCLASS()
-class UGSplatImportData : public UObject
+class UGSplatImportData : public UAssetImportData
 {
 	GENERATED_BODY()
 

@@ -275,8 +275,8 @@ ComputeSplatParameters(
           
 			
 		  {
-              float X = covView[0][0] + 0.3f;
-          	  float Y = covView[1][1] + 0.3f;
+              float X = covView[0][0];
+          	  float Y = covView[1][1];
               float Covariance = covView[0][1];
 
 			  // Determine conic for the splat
@@ -393,9 +393,10 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
     Intermediates.LocalPos = float4(Quad[Input.VertexId % 6], 0, 1);
 
     //cull very non opaque splats
-    if (GSResources.SHAndOpacities[SplatIndex].w < 0.95)
+    if (GSResources.SHAndOpacities[SplatIndex].w < 0.9)
     {
         Intermediates.WorldPosition = float4(0, 0, 0, 0);
+        Intermediates.Conic = float3(0, 0, 0);
         Intermediates.Opacity = 0;
 
         return Intermediates;
@@ -433,7 +434,7 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
         // Primitive parameters
 		Intermediates.SceneData.Primitive,
         SplatIndex,
-        Intermediates.LocalPos.xy,
+        Intermediates.LocalPos.xy * 0.5,
         // Outputs
         Intermediates.WorldPosition,
 		//Intermediates.VertexSvPosition,

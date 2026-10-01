@@ -58,7 +58,7 @@ void UGSplatAsset::PostInitProperties()
 #if WITH_EDITOR
 	if (!HasAnyFlags(RF_ClassDefaultObject))
 	{
-		AssetImportData = NewObject<UAssetImportData>(this, TEXT("AssetImportData"));
+		AssetImportData = NewObject<UGSplatImportData>(this, TEXT("AssetImportData"));
 	}
 #endif
 }
