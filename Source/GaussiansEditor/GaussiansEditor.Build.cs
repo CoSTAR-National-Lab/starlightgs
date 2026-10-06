@@ -14,6 +14,8 @@ public class GaussiansEditor: ModuleRules
             "Core", 
             "CoreUObject", 
 
+            "AppFramework",
+
             "Engine", 
             "UnrealEd",
             "EditorSubsystem",
@@ -23,6 +25,8 @@ public class GaussiansEditor: ModuleRules
             "Slate",
             "SlateCore",
             "ToolWidgets",
+            "ToolMenus",
+            "ContentBrowser",
 
             "GaussiansRenderer", 
             "Gaussians", 

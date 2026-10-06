@@ -1,5 +1,6 @@
 #include "GSplatImportWindow.h"
 
+#include "GSplatDialogHelpers.h"
 #include "GSplatImporter.h"
 #include "SPrimaryButton.h"
 #include "Widgets/Input/SNumericEntryBox.h"
@@ -25,6 +26,7 @@ FText AxisToText(EGSplatSwizzleAxis Axis)
 
 	return INVTEXT("Invalid axis!");
 }
+
 
 void SGSplatSwizzleSelectionWidget::Construct(const FArguments& InArgs)
 {
@@ -256,64 +258,6 @@ void SGSplatImportWindow::Construct(const FArguments& InArgs)
 			}
 		)
 	);
-}
-
-SVerticalBox::FSlot::FSlotArguments SGSplatImportWindow::AddInfoSlot(FText&& Label, FText&& Value)
-{
-	return MoveTemp(SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2)
-		[
-			SNew(SBorder)
-			.Padding(FMargin(3))
-			.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				[
-					SNew(STextBlock)
-					.Text(Label)
-				]
-				+ SHorizontalBox::Slot()
-				.Padding(5, 0, 0, 0)
-				.AutoWidth()
-				.VAlign(VAlign_Center)
-				[
-					SNew(STextBlock)
-					.Text(Value)
-					.ToolTipText(Value)
-				]
-			]
-		]);
-}
-
-SVerticalBox::FSlot::FSlotArguments SGSplatImportWindow::AddOptionSlot(FText&& Label,
-	TFunction<TSharedPtr<SWidget>()>&& CreateWidgetFunc)
-{
-	return MoveTemp(SVerticalBox::Slot()
-	.AutoHeight()
-	.Padding(2)
-	[
-		SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot()
-		.VAlign(VAlign_Center)
-		.HAlign(HAlign_Right)
-		.AutoWidth()
-		.Padding(2.0f)
-		[
-			SNew(STextBlock)
-			.Text(Label)
-		]
-		+ SHorizontalBox::Slot()
-		.VAlign(VAlign_Center)
-		.HAlign(HAlign_Right)
-		.AutoWidth()
-		.Padding(2.0f)
-		[
-			CreateWidgetFunc().ToSharedRef()
-		]
-	]);
 }
 
 FReply SGSplatImportWindow::OnImport()

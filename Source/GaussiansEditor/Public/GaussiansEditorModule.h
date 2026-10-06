@@ -26,4 +26,6 @@ protected:
 	TSharedPtr<FFrostingAssetTypeActions> FrostingAssetTypeActions;
 	TSharedPtr<FGSplatCommponentAssetBroker> ComponentAssetBroker;
 
+	FDelegateHandle ToolMenuStartupCallbackHandle;
+
 };
