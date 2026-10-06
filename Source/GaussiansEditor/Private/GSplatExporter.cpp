@@ -270,7 +270,7 @@ bool GSplatExporter::ExportPly(const UGSplatAsset& InAsset, const FGSplatExportO
 		const FQuat4f Q = Splats.Orientations[i];
 		const FVector4f OutQ = bUseOriginalSpace
 			? InverseSwizzleQuaternion(Q, *Swizzle)
-			: FVector4f(Q.X, Q.Y, Q.Z, Q.W);
+			: FVector4f(Q.X, Q.Y, Q.Z, -Q.W);
 
 		Rot0[i] = OutQ.W;
 		Rot1[i] = OutQ.X;
