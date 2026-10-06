@@ -8,6 +8,7 @@
 
 #include "GaussianSplatClippingVolume.h"
 #include "GSClippingVolumeRebuildService.h"
+#include "GSplatExporter.h"
 
 
 DEFINE_LOG_CATEGORY(LogGSplatEditor);
@@ -26,6 +27,8 @@ void FGaussiansEditor::StartupModule()
 	FComponentAssetBrokerage::RegisterBroker(ComponentAssetBroker, UGaussianSplatComponent::StaticClass(), true, true);
 
 	FGSClippingVolumeRebuildService::GetOnNeedsRebuild().AddStatic(&FGaussiansEditor::OnClippingVolumeNeedsBrushRebuild);
+
+	ToolMenuStartupCallbackHandle = UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateStatic(&FGaussianSplatDataExtension::RegisterMenus));
 }
 
 void FGaussiansEditor::ShutdownModule()
@@ -42,6 +45,8 @@ void FGaussiansEditor::ShutdownModule()
 	}
 
 	FGSClippingVolumeRebuildService::GetOnNeedsRebuild().RemoveAll(this);
+
+	UToolMenus::UnRegisterStartupCallback(ToolMenuStartupCallbackHandle);
 }
 
 void FGaussiansEditor::OnClippingVolumeNeedsBrushRebuild(AGaussianSplatClippingVolume* ClippingVolume)

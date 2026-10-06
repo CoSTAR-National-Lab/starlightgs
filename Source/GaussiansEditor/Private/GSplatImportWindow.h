@@ -68,20 +68,6 @@ public:
 
 private:
 
-	// Helpers for populating the import dialogue
-
-	// Adds a label and text with a different background to standout
-	static SVerticalBox::FSlot::FSlotArguments AddInfoSlot(
-		FText&& Label,
-		FText&& Value
-	);
-
-	// Adds an option with label and widget to control option
-	static SVerticalBox::FSlot::FSlotArguments AddOptionSlot(
-		FText&& Label,
-		TFunction<TSharedPtr<SWidget>()>&& CreateWidgetFunc
-	);
-
 	bool CanImport() const;
 
 private:
