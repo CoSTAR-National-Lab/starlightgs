@@ -210,8 +210,8 @@ bool GSplatExporter::ExportPly(const UGSplatAsset& InAsset, const FGSplatExportO
 	std::vector<float> Metallic, Roughness;
 	if (bWriteMetallicRoughness)
 	{
-		Metallic.reserve(SplatCount);
-		Roughness.reserve(SplatCount);
+		Metallic.resize(SplatCount);
+		Roughness.resize(SplatCount);
 	}
 	std::vector<float> FRest;
 	if (bWriteHighOrderSH)
