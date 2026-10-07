@@ -20,6 +20,11 @@
 - **What it is:** A Gaussian splat renderer for Unreal Engine 5.7+.
 - **Key capabilities:** Relighting, Native Splat Shadow Casting, Mixed-Media Workflows.
 
+> [!CAUTION]
+> StarLightGS does not yet support relighting with Substrate!
+> Substrate is enabled by-default from Unreal Engine 5.7 onwards.
+> Disable Substrate from project settings to use Gaussian Splat relighting with StarLightGS.
+
 ---
 ## 1. Installation
 This plugin requires Unreal Engine version 5.7 or later.
