@@ -67,13 +67,13 @@ void SGSplatExportWindow::Construct(const FArguments& InArgs)
 
 	const FGaussianSplatData& Splats = Asset->Splats;
 
-	const bool bHasImportData = Asset->GSplatImportData != nullptr && Asset->GSplatImportData->Swizzle.Num() == 3;
+	const bool bHasImportData = Asset->AssetImportData != nullptr && Asset->AssetImportData	->Swizzle.Num() == 3;
 	const bool bHasNormals = Splats.bHasNormals && Splats.Normals.Num() == Splats.SplatCount;
 	const bool bHasHighOrderSH = Splats.bHasHighOrderSH && Splats.HighOrderHarmonicsCoefficients.Num() == Splats.SplatCount * FGaussianSplatData::NumHighOrderSH;
 	const bool bHasMetallicRoughness = Splats.bHasMetallicRoughness && Splats.MetallicRoughness.Num() == Splats.SplatCount;
 
 	const int32 DefaultSpaceIndex = bHasImportData ? 0 : 1;
-
+		
 	TSharedPtr<SBox> OptionsBox;
 	this->ChildSlot
 	[

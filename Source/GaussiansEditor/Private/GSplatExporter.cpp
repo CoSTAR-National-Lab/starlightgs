@@ -147,7 +147,7 @@ bool GSplatExporter::ExportPly(const UGSplatAsset& InAsset, const FGSplatExportO
 		return false;
 	}
 
-	const UGSplatImportData* ImportData = InAsset.GSplatImportData;
+	const UGSplatImportData* ImportData = InAsset.AssetImportData;
 
 	// --- Resolve coordinate space ---
 	// "Original capture space" requires the cached import settings to invert the
