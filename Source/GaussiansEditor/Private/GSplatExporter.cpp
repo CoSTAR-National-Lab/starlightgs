@@ -71,7 +71,7 @@ namespace
 	 * Import maps: UnrealAxis[i] = sign(i) * SourceAxis[Swizzle[i]];
 	 * this inverts it: SourceAxis[Swizzle[i]] = sign(i) * UnrealAxis[i].
 	 */
-	FVector3f InverseSwizzleVector(const FVector3f& InV, const TArray<EGSplatSwizzleAxis>& InSwizzle)
+	FVector3f InverseSwizzleVector(const FVector3f& InV, const TArray<EGSplatSwizzleAxis>& InSwizzle, bool Absolute = false)
 	{
 		check(InSwizzle.Num() == 3);
 
@@ -79,7 +79,7 @@ namespace
 		for (int32 i = 0; i < 3; i++)
 		{
 			const int32 SrcAxis = static_cast<int32>(GetSwizzleAxis(InSwizzle[i]));
-			const float Sign = IsSignedSwizzleAxis(InSwizzle[i]) ? -1.0f : 1.0f;
+			const float Sign = IsSignedSwizzleAxis(InSwizzle[i]) && !Absolute ? -1.0f : 1.0f;
 			Out.Component(SrcAxis) = Sign * InV.Component(i);
 		}
 		return Out;
@@ -260,7 +260,7 @@ bool GSplatExporter::ExportPly(const UGSplatAsset& InAsset, const FGSplatExportO
 		FVector3f S = Splats.Scales[i];
 		if (bUseOriginalSpace)
 		{
-			S = InverseSwizzleVector(S, *Swizzle);
+			S = InverseSwizzleVector(S, *Swizzle, true);
 		}
 		Scale0[i] = LogScale(S.X);
 		Scale1[i] = LogScale(S.Y);
