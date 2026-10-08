@@ -9,7 +9,7 @@
 
 AGaussianSplatClippingVolume::AGaussianSplatClippingVolume()
 {
-	ClippingTags.AddTag(FGameplayTag::RequestGameplayTag("StarLightGS.CullingVolumes.Default", false));
+	ClippingTags.AddTag(FGameplayTag::RequestGameplayTag("StarLightGS.ClippingVolumes.Default", false));
 
 	bColored = true;
 	BrushColor.R = 0;

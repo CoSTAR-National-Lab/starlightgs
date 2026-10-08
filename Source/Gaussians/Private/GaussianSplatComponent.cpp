@@ -11,7 +11,7 @@ UGaussianSplatComponent::UGaussianSplatComponent()
 	checkf(MaterialFinder.Succeeded(), TEXT("Could not find asset - plugin is not installed correctly."));
 	ShadowMaterial = MaterialFinder.Object;
 
-	ClippingTags.AddTag(UGameplayTagsManager::Get().RequestGameplayTag("StarLightGS.CullingVolumes.Default", false));
+	ClippingTags.AddTag(UGameplayTagsManager::Get().RequestGameplayTag("StarLightGS.ClippingVolumes.Default", false));
 
 #if WITH_EDITORONLY_DATA
 	bVisualizeComponent = true;

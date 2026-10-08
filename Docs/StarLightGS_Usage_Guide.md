@@ -8,7 +8,7 @@
 - [2. PLY File Requirements](#2-ply-file-requirements)
 - [3. Importing PLY Files](#3-importing-ply-files)
 - [4. Adding PLY Files to Level](#4-adding-ply-files-to-level)
-- [5. Culling Volumes](#5-how-to-use-culling-volumes)
+- [5. Clipping Volumes](#5-how-to-use-clipping-volumes)
 - [6. Exporting PLY Files]()
 - [7. Using Relighting](#7-using-relighting)
 - [8. Using Splat Shadows](#8-using-splat-shadows)
@@ -149,24 +149,27 @@ If your Gaussian Splat asset does not support relighting, it will still render i
 | -------- | -------- | ------- | ----------- |
 | `Gaussian Splat Asset` | `Gaussian Splats` | `None` | The Gaussian Splat asset to be rendered by this component. If the asset supports relighting, then this component will be relit.
 | `Splat Scale Multiplier` | `Gaussian Splats` | `1.0` | Modulates the size of the individual splats within the asset multiplicatively. E.g, a value of 2.0 will make all individual splats twice as large (but will not make the model twice the scale).
-| `Tags` | `Clipping` | `StarLightGS.CullingVolumes.Default` | [Gameplay tags](https://dev.epicgames.com/documentation/unreal-engine/using-gameplay-tags-in-unreal-engine) are used to describe which clipping volumes apply to which splats. StarLightGS defines a default tag that is used as standard by splats and culling volumes.
-| `Exact Match Only` | `Clipping` | `False` | If true, then a culling volume must contain a tag that is an exact match to apply. For example, if this splat had a tag of `Outdoor.Forest`, while ordinarily a culling volume with the tag `Outdoor` would apply, when `Exact Match Only` is true, it would no longer apply.
+| `Tags` | `Clipping` | `StarLightGS.ClippingVolumes.Default` | [Gameplay tags](https://dev.epicgames.com/documentation/unreal-engine/using-gameplay-tags-in-unreal-engine) are used to describe which clipping volumes apply to which splats. StarLightGS defines a default tag that is used as standard by splats and clipping volumes.
+| `Exact Match Only` | `Clipping` | `False` | If true, then a clipping volume must contain a tag that is an exact match to apply. For example, if this splat had a tag of `Outdoor.Forest`, while ordinarily a clipping volume with the tag `Outdoor` would apply, when `Exact Match Only` is true, it would no longer apply.
 | `Shadow Material` | `Advanced` | `M_SplatShadowMaterial` | The shadow material is used to shape the shadows cast by splats. It is recommended to only modify this if you know what you're doing.
 
 ---
 
-## 5. How to Use Culling Volumes
-Splat Culling Volumes can be used to tidy up splat assets, or to segment splat assets into individual parts.
+## 5. How to Use Clipping Volumes
+Splat Clipping Volumes can be used to tidy up splat assets, or to segment splat assets into individual parts.
 
 ### Modes
-Multiple culling modes are available to control the behaviour of culling volumes, which are described the values of `EGaussianSplatClippingVolumeMode`.
+Multiple clipping modes are available to control the behaviour of clipping volumes, which are described the values of `EGaussianSplatClippingVolumeMode`.
+
+> [!WARNING]
+> Currently clipping volumes do not function correctly when parented to other actors with non-identity scaling in the outliner.
 
 | Mode | Description |
 | ---- | ----------- |
-| `Clip Entirely Inside` | Clips splats which are entirely contained by the culling volume. |
-| `Clip Any Inside` | Clips splats which at least partially intersect with the culling volume. |
-| `Clip Entirely Outside` | Clips splats which are at least partially outwith the culling volume. |
-| `Clip Any Outside` | Clips splats which are entirely outwith the culling volume. |
+| `Clip Entirely Inside` | Clips splats which are entirely contained by the clipping volume. |
+| `Clip Any Inside` | Clips splats which at least partially intersect with the clipping volume. |
+| `Clip Entirely Outside` | Clips splats which are at least partially outwith the clipping volume. |
+| `Clip Any Outside` | Clips splats which are entirely outwith the clipping volume. |
 
 ### Setup Steps
 1. Open the Place Actors menu.
@@ -180,9 +183,10 @@ Multiple culling modes are available to control the behaviour of culling volumes
 | -------- | ------- | ----------- |
 | `Enabled` | `True` | Toggles whether this clipping volume will affect the world. |
 | `Mode` | Clip Entirely Inside | Controls the effect that this clipping volume has on the world, whether it culls splats within or outside the volume. |
-| `Priority` | `0` | Controls the order in which culling volumes are applied. Volumes with a lower priority value are applied first. |
-| `Tags` | `StarLightGS.CullingVolumes.Default` | [Gameplay tags](https://dev.epicgames.com/documentation/unreal-engine/using-gameplay-tags-in-unreal-engine) are used to describe which clipping volumes apply to which splats. StarLightGS defines a default tag that is used as standard by splats and culling volumes. |
-| `Exact Match Only` | `False` | If true, then a splat must contain a tag that is an exact match to apply. For example, if this culling volume had a tag of `Outdoor`, while ordinarily this volume would affect a splat with the tag `Outdoor.Forest`, when `Exact Match Only` is true, it would no longer apply. |
+| `Shape` | `Box` | Clipping volumes have two available shapes: boxes or spheres.
+| `Priority` | `0` | Controls the order in which clipping volumes are applied. Volumes with a lower priority value are applied first. |
+| `Tags` | `StarLightGS.ClippingVolumes.Default` | [Gameplay tags](https://dev.epicgames.com/documentation/unreal-engine/using-gameplay-tags-in-unreal-engine) are used to describe which clipping volumes apply to which splats. StarLightGS defines a default tag that is used as standard by splats and clipping volumes. |
+| `Exact Match Only` | `False` | If true, then a splat must contain a tag that is an exact match to apply. For example, if this clipping volume had a tag of `Outdoor`, while ordinarily this volume would affect a splat with the tag `Outdoor.Forest`, when `Exact Match Only` is true, it would no longer apply. |
 
 ### Saving Clipped Splats as a New Asset
 
@@ -299,7 +303,7 @@ The following CVars control the behaviour of the plugin and can be used to toggl
 The following CVars were added as tools to assist in plugin development. Recommended to avoid unless you know what you're doing.
 | CVar | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
-| `r.Gaussians.Debug.CullEveryFrame` | `bool` | `False` | Forces processing of culling volumes every frame. By default, culling is only executed when a splat or culling volume is modified. Forcing it to run every frame can be used for debugging, but is not recommended due to performance overheads. |
+| `r.Gaussians.Debug.CullEveryFrame` | `bool` | `False` | Forces processing of clipping volumes every frame. By default, clipping is only executed when a splat or clipping volume is modified. Forcing it to run every frame can be used for debugging, but is not recommended due to performance overheads. |
 | `r.Gaussians.Debug.DisableViewExtension` | `bool` | `False` | Disables rendering of splats in primary view via view extension to assist debugging splat shadow casting. |
 
 ---
