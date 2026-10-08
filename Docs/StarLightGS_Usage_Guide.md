@@ -9,10 +9,10 @@
 - [3. Importing PLY Files](#3-importing-ply-files)
 - [4. Adding PLY Files to Level](#4-adding-ply-files-to-level)
 - [5. Culling Volumes](#5-how-to-use-culling-volumes)
-- [6. Using Relighting](#6-using-relighting)
-- [7. Using Splat Shadows](#7-using-splat-shadows)
-- [8. Console Variables & Stats](#8-console-variables--stats)
-- [Version & Changelog](#version--changelog)
+- [6. Exporting PLY Files]()
+- [7. Using Relighting](#7-using-relighting)
+- [8. Using Splat Shadows](#8-using-splat-shadows)
+- [9. Console Variables & Stats](#9-console-variables--stats)
 
 ---
 
@@ -198,7 +198,35 @@ A useful workflow is to use clipping volumes to tidy up or segment a splat model
 
 ---
 
-## 6. Using Relighting
+## 6. Exporting PLY Files
+
+`Gaussian Splat Data` assets can be exported as PLY files to interoperate with other software. To export a `Gaussian Splat Data` asset as a PLY, follow the following steps:
+
+1. Right-click on your asset in the content browser.
+2. Click `Export PLY`.
+3. Select your export options (detailed below).
+4. Click export and use the system file dialogue to save your file.
+
+### Export Options
+
+| Property | Default | Description |
+| -------- | ------- | ----------- |
+| `Coordinate Space` | `Original` (if available, otherwise `Unreal`) | The coordinate space to export the asset into. This option is available only when import metadata for the asset is available. See the descriptions of coordinate spaces below.| 
+|Include High-Order SH|`True` (if available, otherwise `False`)|Whether high-order spherical harmonic co-effients are also written into the PLY. Only available when the asset includes high-order SH.|
+|Include Normals|`True` (if available, otherwise `False`)|Whether normals are also written into the PLY. Only available when the asset includes normals.|
+|Include Metallic/Roughness|`True` (if available, otherwise `False`)|Whether metallic & roughness are also written into the PLY. Only available when the asset includes metallic & roughness.|
+
+### Coordinate Spaces
+
+#### Original Space
+This option will undo the swizzle and scale factor applied during import. I.e., importing a PLY and then exporting it in original space will result in a new PLY with exactly the same positions, scales, and rotations as before. Only available when import metadata is available with the asset. 
+
+#### Unreal Space
+Exports without modifying positions, scales, and rotations from Unreal's conventions. This will export a PLY where +X is forward, +Y is right, and +Z is up. Scale will be measured in centimetres.
+
+---
+
+## 7. Using Relighting
 The relighting system works by rendering Gaussian Splat assets into Unreal Engine's GBuffer. The GBuffer is an intermediate stage in Unreal Engine's rendering pipeline, which holds all of the geometry and material information about everything currently on-screen. The lighting and post-processing pipeline ingests the GBuffer to produce a fully lit and processed image. Leveraging Unreal Engine's own lighting pipeline ensures consistent lit appearance between meshes and splats, and 'just works' with the majority of Unreal's lighting features.
 
 ### How To Use
@@ -220,7 +248,7 @@ The relighting system works by rendering Gaussian Splat assets into Unreal Engin
 
 ---
 
-## 7. Using Splat Shadows
+## 8. Using Splat Shadows
 StarLightGS supports native splat shadow casting - that is, splats can cast shadows without requiring a proxy mesh (which can often be difficult to acquire, especially at a good quality).
 
 Native splat shadow casting works by sending our splat geometry as a mesh batch to the shadow rendering pipeline. We use the vertex factory system to inject our own shader code to reshape a single quad into a view-aligned quad for each splat, appropriately sized and positioned. Because this process depends on the light's position and direction, it needs to be repeated for each light source. The advantage of this system is the depth of integration with the existing shadow and lighting system - splat shadows instantly work with all meshes and splats.
@@ -247,7 +275,7 @@ Native splat shadow casting works by sending our splat geometry as a mesh batch 
 
 ---
 
-## 8. Console Variables & Stats
+## 9. Console Variables & Stats
 
 Some console variables are available to assist with control features and debugging.
 
@@ -275,4 +303,4 @@ The following CVars were added as tools to assist in plugin development. Recomme
 | `r.Gaussians.Debug.DisableViewExtension` | `bool` | `False` | Disables rendering of splats in primary view via view extension to assist debugging splat shadow casting. |
 
 ---
-*Last updated: `24/08/2026`*
+*Last updated: `08/10/2026`*
