@@ -338,6 +338,24 @@ bool SGSplatImportWindow::CanImport() const
 	// Check all swizzle axes are different
 	TArray<EGSplatSwizzleAxis> Axes{ EGSplatSwizzleAxis::X, EGSplatSwizzleAxis::Y, EGSplatSwizzleAxis::Z };
 	GetImportSwizzle(Axes);
+
+	// Validate axes
+	for (const auto& Axis : Axes)
+	{
+		switch (Axis)
+		{
+		case EGSplatSwizzleAxis::X:
+		case EGSplatSwizzleAxis::Xn:
+		case EGSplatSwizzleAxis::Y:
+		case EGSplatSwizzleAxis::Yn:
+		case EGSplatSwizzleAxis::Z:
+		case EGSplatSwizzleAxis::Zn:
+			break;
+		default:
+			return false;
+		}
+	}
+
 	uint32 Counter = 0;
 	for (const auto& i : Axes)
 	for (const auto& j : Axes)
