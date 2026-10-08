@@ -129,7 +129,7 @@ void SGSplatExportWindow::Construct(const FArguments& InArgs)
 				TSharedRef<SGSplatOptionGroup> Group = SAssignNew(CoordinateSpaceGroup, SGSplatOptionGroup)
 				.Options({
 					LOCTEXT("CoordinateSpaceOriginal", "Original"),
-					LOCTEXT("CoordinateSpaceUnreal", "Unreal Engine")
+					LOCTEXT("CoordinateSpaceUnreal", "Unreal")
 				})
 				.SelectedIndex(DefaultSpaceIndex)
 				.IsEnabled(bHasImportData);
