@@ -69,6 +69,7 @@ class FGSPrepassCS : public FGlobalShader
 		// Only used when relighting is enabled
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutNormal)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutMetallicRoughness)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<float3>, OutSSVelocity)
 
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutDepth)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutGaussianIDX)
@@ -107,6 +108,7 @@ class FSplattingPassVS : public FGlobalShader
 		// Only used when relighting is enabled
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_Normal) // Octahedron encoding 16bpc
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_MetallicRoughness)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float3>, VS_SSVelocity)
 
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_Depth)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_GaussianIDX)
@@ -147,7 +149,8 @@ END_SHADER_PARAMETER_STRUCT()
 using FRelitBlendState = TStaticBlendState<
 	/* Color:       */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
 	/* Normal:      */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
-	/* Depth + PBR: */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One
+	/* Depth + PBR: */ CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One,
+	/* Velocity: */	   CW_RGBA, BO_Add, BF_InverseDestAlpha, BF_One, BO_Add, BF_InverseDestAlpha, BF_One
 >;
 using FUnlitBlendState = TStaticBlendState<
 	/* Color:    */ CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha,
@@ -186,10 +189,12 @@ void FGSViewExtension::GaussianSplattingPass(
 	// Optional buffers - only in use when relighting enabled
 	FRDGBufferRef NormalBuffer = nullptr;
 	FRDGBufferRef MetallicRoughnessBuffer = nullptr;
+	FRDGBufferRef ScreenSpaceVelocityBuffer = nullptr;
 	if (bRelighting)
 	{
 		NormalBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), Capacity), TEXT("Gaussians.Normal"));
 		MetallicRoughnessBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity), TEXT("Gaussians.MetallicRoughness"));
+		ScreenSpaceVelocityBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(FVector3f), Capacity), TEXT("Gaussians.ScreenSpaceVelocity"));
 	}
 
 	// Setup indirect args
@@ -271,6 +276,7 @@ void FGSViewExtension::GaussianSplattingPass(
 		{
 			PassParameters->OutNormal = GraphBuilder.CreateUAV(NormalBuffer, PF_R32_UINT);
 			PassParameters->OutMetallicRoughness = GraphBuilder.CreateUAV(MetallicRoughnessBuffer, PF_R32_UINT);
+			PassParameters->OutSSVelocity = GraphBuilder.CreateUAV(ScreenSpaceVelocityBuffer, PF_R32_UINT);
 		}
 
 		PassParameters->BufferCapacity = Capacity;
@@ -334,6 +340,7 @@ void FGSViewExtension::GaussianSplattingPass(
 		{
 			PassParameters->VertexShader.VS_Normal = GraphBuilder.CreateSRV(NormalBuffer, PF_R32_UINT);
 			PassParameters->VertexShader.VS_MetallicRoughness = GraphBuilder.CreateSRV(MetallicRoughnessBuffer, PF_R32_UINT);
+			PassParameters->VertexShader.VS_SSVelocity = GraphBuilder.CreateSRV(ScreenSpaceVelocityBuffer, PF_R32_UINT);
 		}
 
 		PassParameters->VertexShader.IndirectArgs = RasterIndirectArgsBuffer;

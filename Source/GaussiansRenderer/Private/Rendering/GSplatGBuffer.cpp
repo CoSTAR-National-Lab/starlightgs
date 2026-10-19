@@ -8,6 +8,7 @@ FGSplatGBuffer::FGSplatGBuffer()
 	: BaseColorTexture(nullptr)
 	, NormalTexture(nullptr)
 	, DepthMetallicRoughnessTexture(nullptr)
+	, VelocityTexture(nullptr)
 {
 }
 
@@ -24,6 +25,7 @@ void FGSplatGBuffer::Init(FRDGBuilder& GraphBuilder, const FSceneView& InView)
 	BaseColorTexture			  = GraphBuilder.CreateTexture(Desc, TEXT("GSplatGBuffer.BaseColor"));
 	NormalTexture				  = GraphBuilder.CreateTexture(Desc, TEXT("GSplatGBuffer.Normal"));
 	DepthMetallicRoughnessTexture = GraphBuilder.CreateTexture(Desc, TEXT("GSplatGBuffer.DepthMetallicRoughness"));
+	VelocityTexture				  = GraphBuilder.CreateTexture(Desc, TEXT("GSplatGBuffer.Velocity"));
 }
 
 void FGSplatGBuffer::Clear(FRDGBuilder& GraphBuilder) const
@@ -31,6 +33,7 @@ void FGSplatGBuffer::Clear(FRDGBuilder& GraphBuilder) const
 	AddClearRenderTargetPass(GraphBuilder, BaseColorTexture);
 	AddClearRenderTargetPass(GraphBuilder, NormalTexture);
 	AddClearRenderTargetPass(GraphBuilder, DepthMetallicRoughnessTexture);
+	AddClearRenderTargetPass(GraphBuilder, VelocityTexture);
 }
 
 FRenderTargetBindingSlots FGSplatGBuffer::GetRenderTargetBindings(bool bClear) const
@@ -43,6 +46,7 @@ FRenderTargetBindingSlots FGSplatGBuffer::GetRenderTargetBindings(bool bClear) c
 	BindingSlots[0] = FRenderTargetBinding(BaseColorTexture, Action);
 	BindingSlots[1] = FRenderTargetBinding(NormalTexture, Action);
 	BindingSlots[2] = FRenderTargetBinding(DepthMetallicRoughnessTexture, Action);
+	BindingSlots[3] = FRenderTargetBinding(VelocityTexture, Action);
 
 	return BindingSlots;
 }
@@ -56,6 +60,7 @@ FGSplatGBufferParameters FGSplatGBuffer::GetShaderParameters(FRDGBuilder& GraphB
 	Parameters.GSplatBaseColor		        = GraphBuilder.CreateSRV(BaseColorTexture);
 	Parameters.GSplatNormal			        = GraphBuilder.CreateSRV(NormalTexture);
 	Parameters.GSplatDepthMetallicRoughness = GraphBuilder.CreateSRV(DepthMetallicRoughnessTexture);
+	Parameters.GSplatVelocity				= GraphBuilder.CreateSRV(VelocityTexture);
 
 	return Parameters;
 }

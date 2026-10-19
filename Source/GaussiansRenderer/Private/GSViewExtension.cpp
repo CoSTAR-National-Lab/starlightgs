@@ -79,6 +79,16 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 	RDG_GPU_STAT_SCOPE(GraphBuilder, GaussiansLit);
 	SCOPED_NAMED_EVENT(GaussiansLit, FColor::Purple);
 
+	check(InView.bIsViewInfo);
+	FViewInfo& ViewInfo = static_cast<FViewInfo&>(InView);
+
+	// Must force engine to use a velocity texture if nobody else does
+	const FSceneTextures& SceneTexturesData = ViewInfo.GetSceneTextures();
+	if (!HasBeenProduced(SceneTexturesData.Velocity))
+	{
+		AddClearRenderTargetPass(GraphBuilder, SceneTexturesData.Velocity);
+	}
+
 	// Run culling for all splats that need it
 	{
 		bool bForceEnable = ClippingVolumeContainer->GetForceClippingEvaluation() || CVarGaussiansForceCullEveryFrame.GetValueOnRenderThread();
