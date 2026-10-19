@@ -313,4 +313,4 @@ The following CVars were added as tools to assist in plugin development. Recomme
 | `r.Gaussians.Debug.DisableViewExtension` | `bool` | `False` | Disables rendering of splats in primary view via view extension to assist debugging splat shadow casting. |
 
 ---
-*Last updated: `08/10/2026`*
+*Last updated: `19/10/2026`*
