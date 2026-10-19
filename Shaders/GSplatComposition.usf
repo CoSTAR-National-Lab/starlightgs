@@ -11,8 +11,11 @@ SCREEN_PASS_TEXTURE_VIEWPORT(OutputViewPort)
 Texture2D<float4> GSplatBaseColor;
 Texture2D<float4> GSplatNormal;
 Texture2D<float4> GSplatDepthMetallicRoughness;
+Texture2D<float4> GSplatVelocity;
 
 float AlphaThreshold;
+
+RWTexture2D<float4> RWVelocityTexture;
 
 
 void GSplatCompositionPS(
@@ -62,6 +65,7 @@ void GSplatCompositionPS(
 
 	const float3 WorldSpaceNormal = normalize(GSplatNormal.Sample(View.SharedBilinearClampedSampler, InUV).rgb);
 	const float3 DepthMetallicRoughness = GSplatDepthMetallicRoughness.Sample(View.SharedBilinearClampedSampler, InUV).rgb;
+	const float3 ScreenSpaceVelocity = GSplatVelocity.Sample(View.SharedBilinearClampedSampler, InUV).rgb;
 
 	const float DeviceZ = DepthMetallicRoughness.r;
 	const float Metallic = DepthMetallicRoughness.g;
@@ -86,6 +90,7 @@ void GSplatCompositionPS(
 	EncodeGBufferToMRT(PSOut, GBufferData, /* QuantizationBias = */0.0f);
 	
 	OutDepth = GBufferData.Depth;
+	RWVelocityTexture[SvPosition.xy] = EncodeVelocityToTexture(ScreenSpaceVelocity);
 
 	PSOut.MRT[0] = float4(0, 0, 0, 0);
 

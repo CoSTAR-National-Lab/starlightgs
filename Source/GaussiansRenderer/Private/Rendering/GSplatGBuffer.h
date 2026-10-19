@@ -7,6 +7,7 @@ BEGIN_SHADER_PARAMETER_STRUCT(FGSplatGBufferParameters, )
 	SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D<float4>, GSplatBaseColor)
 	SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D<float4>, GSplatNormal)
 	SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D<float4>, GSplatDepthMetallicRoughness)
+	SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D<float4>, GSplatVelocity)
 END_SHADER_PARAMETER_STRUCT()
 
 
@@ -34,4 +35,5 @@ private:
 	FRDGTextureRef BaseColorTexture;
 	FRDGTextureRef NormalTexture;
 	FRDGTextureRef DepthMetallicRoughnessTexture;
+	FRDGTextureRef VelocityTexture;
 };

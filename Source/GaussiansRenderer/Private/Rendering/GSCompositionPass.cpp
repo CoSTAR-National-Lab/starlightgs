@@ -30,6 +30,8 @@ class FGSCompositionPS : public FGlobalShader
 
 		SHADER_PARAMETER(float, AlphaThreshold)
 
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, RWVelocityTexture)
+
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -76,6 +78,11 @@ void FGSViewExtension::GSCompositionPass(
 	TStaticArray<FTextureRenderTargetBinding, MaxSimultaneousRenderTargets> RenderTargetTextures;
 	uint32 RenderTargetTextureCount = SceneTexturesData.GetGBufferRenderTargets(RenderTargetTextures);
 	TArrayView<FTextureRenderTargetBinding> RenderTargetTexturesView(RenderTargetTextures.GetData(), RenderTargetTextureCount);
+
+	FRDGTextureRef VelocityTexture = GetIfProduced(SceneTexturesData.Velocity);
+	check(VelocityTexture);
+
+	PassParameters->RWVelocityTexture = GraphBuilder.CreateUAV(SceneTexturesData.Velocity);
 
 	FRDGTextureRef DepthTexture = GetIfProduced(SceneTexturesData.Depth.Target);
 	check(DepthTexture);
