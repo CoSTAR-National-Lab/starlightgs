@@ -23,10 +23,13 @@ This plugin supports rendering of splats with and without relighting. To use rel
 
 ## Getting Started
 ### Requirements
-- Unreal Engine 5.7+
+- Unreal Engine 5.7 or newer.
+- Visual Studio 2022 or newer.
 ### Installing
-- Place StarLightGS into the Plugins folder in your project.
-- Regenerate Visual Studio project files and compile.
+- Place StarLightGS into the Plugins folder in your project. If one doesn't exist, then create a new folder.
+- Regenerate Visual Studio project files by right-clicking your `.uproject` and selecting "Generate Visual Studio project files". On Windows 11, you may have to select "Show more options..." first.
+- Open the generated `.sln` in Visual Studio.
+- Press F5 to build and run the project.
 ### Basic Usage
 - From the content browser, click 'Import'.
 - Navigate to and select your PLY file.
@@ -35,6 +38,11 @@ This plugin supports rendering of splats with and without relighting. To use rel
 - If your PLY supports relighting, relighting will be function out-of-the-box.
 
 See the [Usage Guide](Docs/StarLightGS_Usage_Guide.md) for how to use all features of the plugin.
+
+> [!IMPORTANT]
+> By default, StarLightGS is set to a maximum of 5,000,000 splats. This is to bound runtime memory overhead by default, but the plugin will support as many splats as you have VRAM. The maximum number of splats can be increased via the `r.Gaussians.MaxSplats` console variable.
+> E.g., to increase your project maximum to 10,000,000 splats, add the following line to your `DefaultEngine.ini` beneath `[/Script/Engine.RendererSettings]`:
+> `r.Gaussians.MaxSplats=10000000`
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.

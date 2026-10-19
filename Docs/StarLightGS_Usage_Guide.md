@@ -25,12 +25,18 @@
 > Substrate is enabled by-default from Unreal Engine 5.7 onwards.
 > Disable Substrate from project settings to use Gaussian Splat relighting with StarLightGS.
 
+> [!IMPORTANT]
+> By default, StarLightGS is set to a maximum of 5,000,000 splats. This is to bound runtime memory overhead by default, but the plugin will support as many splats as you have VRAM. The maximum number of splats can be increased via the `r.Gaussians.MaxSplats` console variable.
+> E.g., to increase your project maximum to 10,000,000 splats, add the following line to your `DefaultEngine.ini` beneath `[/Script/Engine.RendererSettings]`:
+> `r.Gaussians.MaxSplats=10000000`
+
 ---
+
 ## 1. Installation
 This plugin requires Unreal Engine version 5.7 or later.
 To install:
 
-1. Place plugin folder into `Plugins/` folder within your project.
+1. Place plugin folder into `Plugins/` folder within your project. If one doesn't exist, then create a new folder.
 2. Right-click on `.uproject` and `Generate Visual Studio project files`.
 3. Open the generated `.sln` (`.slnx` from UE 5.8 onwards).
 4. Build and run from visual studio.
@@ -258,7 +264,7 @@ StarLightGS supports native splat shadow casting - that is, splats can cast shad
 Native splat shadow casting works by sending our splat geometry as a mesh batch to the shadow rendering pipeline. We use the vertex factory system to inject our own shader code to reshape a single quad into a view-aligned quad for each splat, appropriately sized and positioned. Because this process depends on the light's position and direction, it needs to be repeated for each light source. The advantage of this system is the depth of integration with the existing shadow and lighting system - splat shadows instantly work with all meshes and splats.
 
 ### How To Use
-- Enable Virtual Shadow Maps (VSMs) in your project.
+- Enable Virtual Shadow Maps (VSMs) in your project settings (`Project Settings > Rendering > Direct Lighting > Shadow Map Method` set to `Virtual Shadow Maps`).
 - Set your splat component's `Cast Shadow` found in (`Lighting`) to true.
 
 ### Features
