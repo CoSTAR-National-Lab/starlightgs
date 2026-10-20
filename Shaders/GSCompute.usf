@@ -216,8 +216,8 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_
 			float3x3 JW = mul(J, transpose((float3x3) PrimaryView.TranslatedWorldToView));
 			float3x3 Covariance2D = mul(JW, mul(transpose(Covariance3D), transpose(JW)));
 
-			float X = Covariance2D[0][0];
-			float Y = Covariance2D[1][1];
+            float X = Covariance2D[0][0] + 0.3f;
+            float Y = Covariance2D[1][1] + 0.3f;
 			float Covariance = Covariance2D[0][1];
 
 		    // Determine conic for the splat
