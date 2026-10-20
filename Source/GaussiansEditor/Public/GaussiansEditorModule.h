@@ -4,7 +4,6 @@
 #include "Modules/ModuleInterface.h"
 
 #include "GSplatAssetTypeActions.h"
-#include "FrostingAssetTypeActions.h"
 #include "GSplatCommponentAssetBroker.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogGSplatEditor, Log, All)
@@ -23,7 +22,6 @@ private:
 
 protected:
 	TSharedPtr<FGSplatAssetTypeActions> GSplatAssetTypeActions;
-	TSharedPtr<FFrostingAssetTypeActions> FrostingAssetTypeActions;
 	TSharedPtr<FGSplatCommponentAssetBroker> ComponentAssetBroker;
 
 	FDelegateHandle ToolMenuStartupCallbackHandle;
