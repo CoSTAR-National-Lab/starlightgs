@@ -26,7 +26,8 @@ public:
 
 	// Use this to bind GSplatGBuffer as render targets. Also binds depth-stencil view
 	// If bClear = true, render targets will be cleared on load
-	FRenderTargetBindingSlots GetRenderTargetBindings(bool bClear = false) const;
+	// If a depth buffer is supplied, this will be used for a read-only depth test during rasterization
+	FRenderTargetBindingSlots GetRenderTargetBindings(bool bClear = false, FRDGTextureRef DepthBuffer = nullptr) const;
 
 	// Use this to bind GSplatGBuffer as collection of shader parameters for reading
 	FGSplatGBufferParameters GetShaderParameters(FRDGBuilder& GraphBuilder) const;

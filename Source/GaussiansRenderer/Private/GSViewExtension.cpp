@@ -116,7 +116,7 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 			GSplatGBuffer.Clear(GraphBuilder);
 		}
 
-		GaussianSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(), RelightableProxies, GPUStats.Get());
+		GaussianSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(false, SceneTexturesData.Depth.Target), RelightableProxies, GPUStats.Get());
 		GSCompositionPass(GraphBuilder, InView, GSplatGBuffer);
 	}
 }

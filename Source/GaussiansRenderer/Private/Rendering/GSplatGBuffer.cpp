@@ -36,7 +36,7 @@ void FGSplatGBuffer::Clear(FRDGBuilder& GraphBuilder) const
 	AddClearRenderTargetPass(GraphBuilder, VelocityTexture);
 }
 
-FRenderTargetBindingSlots FGSplatGBuffer::GetRenderTargetBindings(bool bClear) const
+FRenderTargetBindingSlots FGSplatGBuffer::GetRenderTargetBindings(bool bClear, FRDGTextureRef DepthBuffer) const
 {
 	check(IsInRenderingThread());
 
@@ -47,6 +47,16 @@ FRenderTargetBindingSlots FGSplatGBuffer::GetRenderTargetBindings(bool bClear) c
 	BindingSlots[1] = FRenderTargetBinding(NormalTexture, Action);
 	BindingSlots[2] = FRenderTargetBinding(DepthMetallicRoughnessTexture, Action);
 	BindingSlots[3] = FRenderTargetBinding(VelocityTexture, Action);
+
+	if (DepthBuffer)
+	{
+		BindingSlots.DepthStencil = FDepthStencilBinding(
+			DepthBuffer, 
+			ERenderTargetLoadAction::ELoad,
+			ERenderTargetLoadAction::ELoad,
+			FExclusiveDepthStencil::DepthRead
+		);
+	}
 
 	return BindingSlots;
 }

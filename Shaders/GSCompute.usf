@@ -428,9 +428,8 @@ struct FRTOut
 	float4 Velocity : SV_Target3;
 #else
     float4 Velocity : SV_Target1;
-	float DeviceZ : SV_Depth;
 #endif
-
+	float DeviceZ : SV_Depth;
 };
  
 FRTOut GSSplatting_PS(FOutVertex Input)
@@ -468,8 +467,9 @@ FRTOut GSSplatting_PS(FOutVertex Input)
 	Output.Velocity = EncodeVelocityToTexture(Velocity);
 
 	// For unlit splats, only used to test against scene depth and not written to depth buffer
-	Output.DeviceZ = Input.DeviceZ;
 #endif
+
+	Output.DeviceZ = Input.DeviceZ;
 
     return Output;
 }

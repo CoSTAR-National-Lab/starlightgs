@@ -157,7 +157,7 @@ using FUnlitBlendState = TStaticBlendState<
 	/* Velocity: */ CW_RGBA, BO_Add, BF_One, BF_Zero, BO_Add, BF_One, BF_Zero
 >;
 
-using FRelitDepthStencilState = TStaticDepthStencilState<false, CF_Always>;
+using FRelitDepthStencilState = TStaticDepthStencilState<false, CF_DepthNearOrEqual>;
 using FUnlitDepthStencilState = TStaticDepthStencilState<false, CF_DepthNearOrEqual>;
 
 
