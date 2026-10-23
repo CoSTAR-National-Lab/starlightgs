@@ -69,7 +69,7 @@ class FGSPrepassCS : public FGlobalShader
 		// Only used when relighting is enabled
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutNormal)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutMetallicRoughness)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutSSVelocity)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint2>, OutSSVelocity)
 
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutDepth)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutGaussianIDX)
@@ -108,7 +108,7 @@ class FSplattingPassVS : public FGlobalShader
 		// Only used when relighting is enabled
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_Normal) // Octahedron encoding 16bpc
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_MetallicRoughness)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float3>, VS_SSVelocity)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint2>, VS_SSVelocity)
 
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_Depth)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, VS_GaussianIDX)
@@ -194,7 +194,7 @@ void FGSViewExtension::GaussianSplattingPass(
 	{
 		NormalBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), Capacity), TEXT("Gaussians.Normal"));
 		MetallicRoughnessBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity), TEXT("Gaussians.MetallicRoughness"));
-		ScreenSpaceVelocityBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), Capacity), TEXT("Gaussians.ScreenSpaceVelocity"));
+		ScreenSpaceVelocityBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(FUintVector2), Capacity), TEXT("Gaussians.ScreenSpaceVelocity"));
 	}
 
 	// Setup indirect args
@@ -276,7 +276,7 @@ void FGSViewExtension::GaussianSplattingPass(
 		{
 			PassParameters->OutNormal = GraphBuilder.CreateUAV(NormalBuffer, PF_R32_UINT);
 			PassParameters->OutMetallicRoughness = GraphBuilder.CreateUAV(MetallicRoughnessBuffer, PF_R32_UINT);
-			PassParameters->OutSSVelocity = GraphBuilder.CreateUAV(ScreenSpaceVelocityBuffer);
+			PassParameters->OutSSVelocity = GraphBuilder.CreateUAV(ScreenSpaceVelocityBuffer, PF_R32G32_UINT);
 		}
 
 		PassParameters->BufferCapacity = Capacity;
@@ -340,7 +340,7 @@ void FGSViewExtension::GaussianSplattingPass(
 		{
 			PassParameters->VertexShader.VS_Normal = GraphBuilder.CreateSRV(NormalBuffer, PF_R32_UINT);
 			PassParameters->VertexShader.VS_MetallicRoughness = GraphBuilder.CreateSRV(MetallicRoughnessBuffer, PF_R32_UINT);
-			PassParameters->VertexShader.VS_SSVelocity = GraphBuilder.CreateSRV(ScreenSpaceVelocityBuffer);
+			PassParameters->VertexShader.VS_SSVelocity = GraphBuilder.CreateSRV(ScreenSpaceVelocityBuffer, PF_R32G32_UINT);
 		}
 
 		PassParameters->VertexShader.IndirectArgs = RasterIndirectArgsBuffer;

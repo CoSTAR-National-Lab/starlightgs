@@ -56,6 +56,19 @@ float2 UnpackMetallicRoughness(uint PackedMR)
 	return float2(f16tof32(PackedMR >> 16), f16tof32(PackedMR));
 }
 
+uint2 PackVelocity(float3 Velocity)
+{
+	return uint2(
+		PackNormal(normalize(Velocity)),
+		asuint(length(Velocity))
+	);
+}
+
+float3 UnpackVelocity(uint2 PackedVelocity)
+{
+	return UnpackNormal(PackedVelocity.x) * asfloat(PackedVelocity.y);
+}
+
 Buffer<uint> SplatIndexBuffer;
 Buffer<uint> SplatIndexCounter;
 
@@ -69,7 +82,7 @@ RWBuffer<float4> OutColorOpacity;
 #if ENABLE_RELIGHTING
 RWBuffer<uint> OutNormal; // Octahedron encoding 16bpc
 RWBuffer<uint> OutMetallicRoughness;
-RWStructuredBuffer<float3> OutSSVelocity;
+RWBuffer<uint2> OutSSVelocity;
 #endif
 
 RWBuffer<uint> OutDepth;
@@ -111,7 +124,7 @@ groupshared float4 GS_ColorOpacity[THREADGROUP_SIZE_1D];
 #if ENABLE_RELIGHTING
 groupshared uint GS_Normal[THREADGROUP_SIZE_1D];
 groupshared uint GS_MetallicRoughness[THREADGROUP_SIZE_1D];
-groupshared float3 GS_SSVelocity[THREADGROUP_SIZE_1D];
+groupshared uint2 GS_SSVelocity[THREADGROUP_SIZE_1D];
 #endif
 
 groupshared uint GS_Depth[THREADGROUP_SIZE_1D];
@@ -289,7 +302,7 @@ void GSPrepass(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_
 
 					float3 Velocity = float3(CurrentClipPosition.xyz - PreviousClipPosition.xyz);
 
-					GS_SSVelocity[Index] = Velocity;
+					GS_SSVelocity[Index] = PackVelocity(Velocity);
 #endif
 				}
 			}
@@ -347,7 +360,7 @@ Buffer<uint> VS_Depth;
 #if ENABLE_RELIGHTING
 Buffer<uint> VS_MetallicRoughness;
 Buffer<uint> VS_Normal; // Octahedron encoding 16bpc
-StructuredBuffer<float3> VS_SSVelocity;
+Buffer<uint2> VS_SSVelocity;
 #endif
 
 Buffer<uint> VS_GaussianIDX;
@@ -366,7 +379,7 @@ struct FOutVertex
 #if ENABLE_RELIGHTING
     float2 MR : METALLICROUGHNESS;
     float3 Normal : NORMAL_MEAN;
-	float3 Velocity : NORMAL_VELOCITY;
+	float3 Velocity : VELOCITY_MEAN;
 #else
 	// For velocity calculation
 	float3 TranslatedWorldPosition : WORLDPOS;
@@ -409,7 +422,7 @@ FOutVertex GSSplatting_VS(uint GlobalVertexId : SV_VertexID, uint InstanceID : S
 #if ENABLE_RELIGHTING
 	Output.MR = UnpackMetallicRoughness(VS_MetallicRoughness[Index]);
 	Output.Normal = UnpackNormal(VS_Normal[Index]);
-	Output.Velocity = VS_SSVelocity[Index];
+	Output.Velocity = UnpackVelocity(VS_SSVelocity[Index]);
 #else
 	float4 TranslatedWorldPos = mul(float4(ScreenSpacePos, Output.DeviceZ, 1.0f), PrimaryView.ClipToTranslatedWorld);
 	Output.TranslatedWorldPosition = TranslatedWorldPos.xyz / TranslatedWorldPos.w;
