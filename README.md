@@ -10,7 +10,7 @@ Gaussian splat renderer for Unreal Engine 5.7+ with a focus on relighting and na
 > Check out our [sample project](https://github.com/CoSTAR-National-Lab/starlightgs-sample) to see the plugin in action.
 
 > [!TIP]
-> Create your own relightable gaussian splats with our [training pipeline](https://github.com/CoSTAR-National-Lab/relighting-gaussians-training), built on [GS-IR](https://github.com/lzhnb/gs-ir).
+> Create your own relightable gaussian splats with our [training pipeline](https://github.com/CoSTAR-National-Lab/starlightgs-training), built on [GS-IR](https://github.com/lzhnb/gs-ir).
 
 ## Description
 This plugin features:
@@ -20,7 +20,7 @@ This plugin features:
 - Native shadow-casting for Gaussian Splats onto meshes and other splats.
 - Splats receive shadows and global illumination from meshes.
 
-This plugin supports rendering of splats with and without relighting. To use relighting, your PLY files must have per-splat normals. This can be achieved through using [our training pipeline](https://github.com/CoSTAR-National-Lab/relighting-gaussians-training).
+This plugin supports rendering of splats with and without relighting. To use relighting, your PLY files must have per-splat normals. This can be achieved through using [our training pipeline](https://github.com/CoSTAR-National-Lab/starlightgs-training).
 
 > [!CAUTION]
 > StarLightGS does not yet support relighting with Substrate!
