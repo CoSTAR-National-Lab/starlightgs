@@ -20,11 +20,6 @@
 - **What it is:** A Gaussian splat renderer for Unreal Engine 5.7+.
 - **Key capabilities:** Relighting, Native Splat Shadow Casting, Mixed-Media Workflows.
 
-> [!CAUTION]
-> StarLightGS does not yet support relighting with Substrate!
-> Substrate is enabled by-default from Unreal Engine 5.7 onwards.
-> Disable Substrate from project settings to use Gaussian Splat relighting with StarLightGS.
-
 > [!IMPORTANT]
 > By default, StarLightGS is set to a maximum of 5,000,000 splats. This is to bound runtime memory overhead by default, but the plugin will support as many splats as you have VRAM. The maximum number of splats can be increased via the `r.Gaussians.MaxSplats` console variable.
 > E.g., to increase your project maximum to 10,000,000 splats, add the following line to your `DefaultEngine.ini` beneath `[/Script/Engine.RendererSettings]`:
@@ -254,7 +249,6 @@ The relighting system works by rendering Gaussian Splat assets into Unreal Engin
 - The GBuffer can only store information about _opaque_ geometry and materials. Therefore, any relightable splats will be turned opaque. In some cases, this can result in artefacts around the edges of objects. See the [section on CVars](#control-plugin-features-via-cvars) for how to control this behaviour.
 - Splats do not contribute to the lumen scene for casting global illumination and (non-screen-space) reflections onto other objects.
 - Splats do not currently support raytracing. They will not work with any raytracing features, including raytraced shadows, MegaLights, or Lumen with hardware raytracing.
-- The method of rendering splats into the GBuffer will not work in projects with Substrate enabled.
 
 ---
 

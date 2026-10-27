@@ -117,7 +117,16 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
 		}
 
 		GaussianSplattingPass(GraphBuilder, InView, GSplatGBuffer.GetRenderTargetBindings(false, SceneTexturesData.Depth.Target), RelightableProxies, GPUStats.Get());
-		GSCompositionPass(GraphBuilder, InView, GSplatGBuffer);
+		GSCompositionPass(GraphBuilder, InView, GSplatGBuffer, RenderTargets);
+
+		// This hack is required for the case where the scene contains only splats and no other
+		// scene proxies that declare themselves with Substrate view relevance.
+		// In those cases, the deferred direct lighting pipeline would otherwise never be executed.
+		// By setting this flag we ensure that the deferred direct lighting pipeline will definitely be executed when lit splats are present.
+		if (Substrate::IsSubstrateEnabled())
+		{
+			ViewInfo.SubstrateViewData.UsesTileTypeMask |= ViewInfo.SubstrateViewData.UsesTileTypeMask ? 0u : 1u;
+		}
 	}
 }
 

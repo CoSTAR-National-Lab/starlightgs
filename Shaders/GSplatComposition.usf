@@ -4,6 +4,48 @@
 #include "/Engine/Private/DeferredShadingCommon.ush"
 
 
+#if SUBSTRATE_ENABLED
+
+#define SUBSTRATE_MATERIALCONTAINER_IS_VIEWRESOURCE 1
+#define MATERIAL_SUBSTRATE_OPAQUE_PRECOMPUTED_LIGHTING 0
+#define SUBSTRATE_OPAQUE_DEFERRED 1
+#define SUBSTRATE_DEFERRED_SHADING 1
+
+#include "/Engine/Private/Substrate/Substrate.ush"
+#include "/Engine/Private/Substrate/SubstrateExport.ush"
+#include "/Engine/Private/Substrate/SubstrateLegacyConversion.ush"
+
+#define SUBSTRATE_OUTPUT_GBUFFER  (SUBSTRATE_OPAQUE_DEFERRED && SUBSTRATE_GBUFFER_FORMAT==1)
+
+// These are left in as canaries for future breaking engine changes that will stop this method from working
+#if SUBSTRATE_OUTPUT_GBUFFER
+#if SUBSTRATE_BASE_PASS_MRT_OUTPUT_COUNT != 3
+#error Substrate SUBSTRATE_BASE_PASS_MRT_OUTPUT_COUNT has been updated but not the uint MRTs
+#endif
+#if SUBSTRATE_FIRST_MRT_INDEX > 4
+#error Substrate cannot map to such a case
+#endif
+#endif
+
+// Default functions for Legacy material conversion to function properly
+void GetEyeNormals(float IrisMask, float IrisDistance, in float3 InNormal, in float3 InClearCoatNormal, in float3 InCustomTangent, inout float3 OutIrisNormal, inout float3 OutIrisPlaneNormal)
+{
+	OutIrisNormal = InNormal;
+	OutIrisPlaneNormal = InNormal;
+}
+
+// Default functions for PackSubstrateOut to function properly
+void FSubstratePixelHeader::PreUpdateAllBSDFWithBottomUpOperatorVisit(float3 V) {}
+void FSubstratePixelHeader::UpdateAllBSDFsOperatorCoverageTransmittance(FSubstrateIntegrationSettings Settings, float3 V) {}
+void FSubstratePixelHeader::UpdateAllOperatorsCoverageTransmittance() {}
+void FSubstratePixelHeader::UpdateAllBSDFWithBottomUpOperatorVisit() {}
+void FSubstratePixelHeader::PreUpdateAllBSDFWithBottomUpOperatorVisit_FullySimplified(float3 V) {}
+void FSubstratePixelHeader::UpdateAllBSDFsOperatorCoverageTransmittance_FullySimplified(FSubstrateIntegrationSettings Settings, float3 V) {}
+void FSubstratePixelHeader::UpdateAllOperatorsCoverageTransmittance_FullySimplified() {}
+void FSubstratePixelHeader::UpdateAllBSDFWithBottomUpOperatorVisit_FullySimplified() {}
+
+#endif
+
 SCREEN_PASS_TEXTURE_VIEWPORT(InputViewPort)
 SCREEN_PASS_TEXTURE_VIEWPORT(OutputViewPort)
 
@@ -38,6 +80,31 @@ void GSplatCompositionPS(
 	, out float4 OutTarget3 : SV_Target3
 #endif
 
+//--- SUBSTRATE ---
+#if SUBSTRATE_OUTPUT_GBUFFER
+#if SUBSTRATE_FIRST_MRT_INDEX == 4
+		, out uint SubstrateOutput4 : SV_Target4
+		, out uint SubstrateOutput5 : SV_Target5
+		, out uint SubstrateOutput6 : SV_Target6
+		, out SUBSTRATE_TOP_LAYER_TYPE SubstrateOutput7 : SV_Target7
+#elif SUBSTRATE_FIRST_MRT_INDEX == 3
+		, out uint SubstrateOutput3 : SV_Target3
+		, out uint SubstrateOutput4 : SV_Target4
+		, out uint SubstrateOutput5 : SV_Target5
+		, out SUBSTRATE_TOP_LAYER_TYPE SubstrateOutput6 : SV_Target6
+#elif SUBSTRATE_FIRST_MRT_INDEX == 2
+		, out uint SubstrateOutput2 : SV_Target2
+		, out uint SubstrateOutput3 : SV_Target3
+		, out uint SubstrateOutput4 : SV_Target4
+		, out SUBSTRATE_TOP_LAYER_TYPE SubstrateOutput5 : SV_Target5
+#else
+		, out uint SubstrateOutput1 : SV_Target1
+		, out uint SubstrateOutput2 : SV_Target2
+		, out uint SubstrateOutput3 : SV_Target3
+		, out SUBSTRATE_TOP_LAYER_TYPE SubstrateOutput4 : SV_Target4
+#endif
+#else // SUBSTRATE_OUTPUT_GBUFFER
+
 #if PIXELSHADEROUTPUT_MRT4
 	, out float4 OutTarget4 : SV_Target4
 #endif
@@ -53,6 +120,8 @@ void GSplatCompositionPS(
 #if PIXELSHADEROUTPUT_MRT7
 	, out float4 OutTarget7 : SV_Target7
 #endif
+
+#endif // SUBSTRATE_OUTPUT_GBUFFER
 
 	, out float OutDepth : SV_Depth
 )
@@ -70,6 +139,110 @@ void GSplatCompositionPS(
 	const float DeviceZ = DepthMetallicRoughness.r;
 	const float Metallic = DepthMetallicRoughness.g;
 	const float Roughness = DepthMetallicRoughness.b;
+	const float Specular = 0.5f;
+
+	float4 TranslatedWorldPosition = mul(float4(SvPosition.xy, DeviceZ, 1), View.SVPositionToTranslatedWorld);
+	TranslatedWorldPosition.xyz /= TranslatedWorldPosition.w;
+	float3 CameraVector = -GetCameraVectorFromTranslatedWorldPosition(TranslatedWorldPosition.xyz);
+
+	FPixelShaderOut PSOut;
+
+#if (MATERIAL_IS_SUBSTRATE && SUBSTRATE_ENABLED && SUBSTRATE_GBUFFER_FORMAT == 1)
+
+	// Create Substrate slab from GBuffer data
+	FSubstratePixelHeader SubstratePixelHeader = InitialiseSubstratePixelHeader();
+	const FSubstratePixelFootprint PixelFootprint = SubstrateGetPixelFootprint(TranslatedWorldPosition.xyz, 0.0f);
+
+	FSubstrateData SubstrateData = SubstratePixelHeader.SubstrateTree.PromoteParameterBlendedBSDFToOperator(
+		SubstrateConvertLegacyMaterialStatic(
+			PixelFootprint,
+			BaseColor.rgb,
+			Specular,
+			Metallic,
+			Roughness,
+			0.0f, // Aniso
+			float3(1.0f, 1.0f, 1.0f), // Subsurface colour
+			0, // Subsurface profile int
+			1.0f, // Clear coat
+			0.1f, // Clear coat roughness
+			float3(0.0f, 0.0f, 0.0f), // Emissive
+			1.0f, // Opacity
+			float3(0.5f, 0.5f, 0.5f), // Thin translucent colour
+			1.0f, // Thin translucent coverage
+			float3(0.0f, 0.0f, 0.0f), // Water scattering
+			float3(0.0f, 0.0f, 0.0f), // Water absorption
+			0.0f, // Water phase G
+			float3(1.0f, 1.0f, 1.0f), // Color scale behind water
+			SHADINGMODELID_DEFAULT_LIT, // Shading model
+			WorldSpaceNormal, // Raw normal
+			WorldSpaceNormal, // Raw tangent
+			WorldSpaceNormal, // Raw clear coat normal
+			WorldSpaceNormal, // Raw custom tangent
+			0, // Shared local basis index
+			0, // Clear coat bottom normal shared local basis index
+			SubstratePixelHeader.SharedLocalBases.Types
+		), /*int OperatorIndex*/ 0, /*int BSDFIndex*/ 0, /*int LayerDepth*/ 0, /*int bIsBottom*/ 1
+	);
+	SubstratePixelHeader.SubstrateTree.BSDFs[0].LuminanceWeightV = 1.0f;
+	SubstratePixelHeader.SubstrateTree.BSDFs[0].TransmittanceAboveAlongN = 1.0f;
+	SubstratePixelHeader.SubstrateTree.BSDFs[0].TopLayerDataWeight = 1.0f;
+
+	SubstratePixelHeader.SharedLocalBases.Normals[0] =  WorldSpaceNormal;
+	SubstratePixelHeader.SharedLocalBases.Count = 1;
+
+	SubstratePixelHeader.ClosureCount = SubstratePixelHeader.SubstrateTree.BSDFCount;
+	SubstratePixelHeader.IrradianceAO = InitIrradianceAndOcclusion();
+
+	// Generate the Substrate material data to write out
+	FSubstrateIntegrationSettings Settings = InitSubstrateIntegrationSettings(
+		false /*bForceFullyRough*/, 
+		GaussianSplattingSubstrate.bRoughDiffuse, 
+		GaussianSplattingSubstrate.PeelLayersAboveDepth, 
+		GaussianSplattingSubstrate.bRoughnessTracking
+	);
+
+	// Output substrate data to adaptive GBuffer
+
+	FSubstrateAddressing SubstrateAddressing = GetSubstratePixelDataByteOffset(SvPosition.xy, uint2(PrimaryView.BufferSizeAndInvSize.xy), GaussianSplattingSubstrate.MaxBytesPerPixel);
+	FRWSubstrateMaterialContainer RWSubstrateMaterialContainer = InitialiseRWSubstrateMaterialContainer(GaussianSplattingSubstrate.MaterialTextureArrayUAVWithoutRTs, 1, SvPosition.xy);
+
+	const float Dither = 0.0f;
+
+	// inout params
+	bool bSubstrateSubsurfaceEnabled = false;
+	float3 EmissiveLuminance = 0.0f;
+	FSubstrateSubsurfaceData SSSData = (FSubstrateSubsurfaceData)0;
+	FSubstrateTopLayerData TopLayerData = (FSubstrateTopLayerData)0;
+	FSubstrateOpaqueRoughRefractionData OpaqueRoughRefractionData = (FSubstrateOpaqueRoughRefractionData)0;
+
+	PackSubstrateOut(
+		RWSubstrateMaterialContainer,
+		GaussianSplattingSubstrate.MaterialTextureArrayUAVWithoutRTs,
+		Dither,
+		Settings,
+		SubstrateAddressing,
+
+		// GBuffer data built into a Substrate slab
+		SubstratePixelHeader, 
+		SubstrateData, 
+		
+		CameraVector,
+		WorldSpaceNormal,
+		bSubstrateSubsurfaceEnabled,
+		EmissiveLuminance,
+		SSSData,
+		TopLayerData,
+		OpaqueRoughRefractionData
+	);
+
+	PSOut.SubstrateOutput[0] = RWSubstrateMaterialContainer.MaterialRenderTargets[0];
+	PSOut.SubstrateOutput[1] = RWSubstrateMaterialContainer.MaterialRenderTargets[1];
+	PSOut.SubstrateOutput[2] = RWSubstrateMaterialContainer.MaterialRenderTargets[2];
+	PSOut.SubstrateTopLayerData = SubstratePackTopLayerData(TopLayerData);
+
+#else
+
+	// Legacy GBuffer & Substrate blendable GBuffer method
 
 	// Encode into GBuffer data
 	FGBufferData GBufferData = (FGBufferData) 0;
@@ -79,17 +252,18 @@ void GSplatCompositionPS(
 	GBufferData.SpecularColor = 0.0f;
 	GBufferData.BaseColor = BaseColor.rgb;
 	GBufferData.Metallic = Metallic;
-	GBufferData.Specular = 0.5f;
+	GBufferData.Specular = Specular;
 	GBufferData.Roughness = Roughness;
 	GBufferData.ShadingModelID = SHADINGMODELID_DEFAULT_LIT;
 	GBufferData.Velocity = 0.0f;
 	GBufferData.GenericAO = 1.0f;
 
 	// Encode data into MRT format
-	FPixelShaderOut PSOut;
 	EncodeGBufferToMRT(PSOut, GBufferData, /* QuantizationBias = */0.0f);
-	
-	OutDepth = GBufferData.Depth;
+
+#endif
+
+	OutDepth = DeviceZ;
 	RWVelocityTexture[SvPosition.xy] = EncodeVelocityToTexture(ScreenSpaceVelocity);
 
 	PSOut.MRT[0] = float4(0, 0, 0, 0);
@@ -110,6 +284,30 @@ void GSplatCompositionPS(
 	OutTarget3 = PSOut.MRT[3];
 #endif
 
+#if SUBSTRATE_OUTPUT_GBUFFER
+#if SUBSTRATE_FIRST_MRT_INDEX == 4
+	SubstrateOutput4 = PSOut.SubstrateOutput[0];
+	SubstrateOutput5 = PSOut.SubstrateOutput[1];
+	SubstrateOutput6 = PSOut.SubstrateOutput[2];
+	SubstrateOutput7 = PSOut.SubstrateTopLayerData;
+#elif SUBSTRATE_FIRST_MRT_INDEX == 3
+	SubstrateOutput3 = PSOut.SubstrateOutput[0];
+	SubstrateOutput4 = PSOut.SubstrateOutput[1];
+	SubstrateOutput5 = PSOut.SubstrateOutput[2];
+	SubstrateOutput6 = PSOut.SubstrateTopLayerData;
+#elif SUBSTRATE_FIRST_MRT_INDEX == 2
+	SubstrateOutput2 = PSOut.SubstrateOutput[0];
+	SubstrateOutput3 = PSOut.SubstrateOutput[1];
+	SubstrateOutput4 = PSOut.SubstrateOutput[2];
+	SubstrateOutput5 = PSOut.SubstrateTopLayerData;
+#else
+	SubstrateOutput1 = PSOut.SubstrateOutput[0];
+	SubstrateOutput2 = PSOut.SubstrateOutput[1];
+	SubstrateOutput3 = PSOut.SubstrateOutput[2];
+	SubstrateOutput4 = PSOut.SubstrateTopLayerData;
+#endif
+#else // SUBSTRATE_OUTPUT_GBUFFER
+
 #if PIXELSHADEROUTPUT_MRT4
 	OutTarget4 = PSOut.MRT[4];
 #endif
@@ -125,4 +323,6 @@ void GSplatCompositionPS(
 #if PIXELSHADEROUTPUT_MRT7
 	OutTarget7 = PSOut.MRT[7];
 #endif
+
+#endif // SUBSTRATE_OUTPUT_GBUFFER
 }

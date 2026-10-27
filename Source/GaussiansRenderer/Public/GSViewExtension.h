@@ -57,7 +57,8 @@ private:
 	static void GSCompositionPass(
 		FRDGBuilder& GraphBuilder, 
 		const FSceneView& InView, 
-		const FGSplatGBuffer& GSplatGBuffer
+		const FGSplatGBuffer& GSplatGBuffer,
+		const FRenderTargetBindingSlots& RenderTargets
 	);
 
 	// Creates an index buffer of all non-culled splats

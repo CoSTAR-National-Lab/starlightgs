@@ -15,17 +15,12 @@ Gaussian splat renderer for Unreal Engine 5.7+ with a focus on relighting and na
 ## Description
 This plugin features:
 - High performance rendering handling 10+ million splats.
-- Relighting support.
+- Relighting support (including with Substrate).
 - Interoperability with meshes and splats.
 - Native shadow-casting for Gaussian Splats onto meshes and other splats.
 - Splats receive shadows and global illumination from meshes.
 
 This plugin supports rendering of splats with and without relighting. To use relighting, your PLY files must have per-splat normals. This can be achieved through using [our training pipeline](https://github.com/CoSTAR-National-Lab/starlightgs-training).
-
-> [!CAUTION]
-> StarLightGS does not yet support relighting with Substrate!
-> Substrate is enabled by-default from Unreal Engine 5.7 onwards.
-> Disable Substrate from project settings to use Gaussian Splat relighting with StarLightGS.
 
 ## Getting Started
 ### Requirements
