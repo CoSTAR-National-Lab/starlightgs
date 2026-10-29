@@ -32,10 +32,8 @@ struct FVertexFactoryIntermediates
 {
     float4 LocalPos;
     float4 WorldPosition;
-//	float2 VertexSvPosition; // For calculating distance from mean in pixel shader
   
     float3 Conic;
-//    float2 MeanScreenSpacePosition;
     float Opacity;
     float3 Normal;
 
@@ -162,32 +160,22 @@ ComputeSplatParameters(
     float3x3 RotationMatrix = mul(transpose(DFToFloat3x3(Primitive.LocalToWorld)), QuatToMatrix(GSResources.Orientations[SplatIndex]));
     float3 MeanPosition = GSResources.Positions[SplatIndex];
 
-    ////DebugSplat
-    //float3 MeanPosition = float3(0, 0, 0);
-    //float3x3 ScaleMatrix = VecToScaleMatrix(float3(0.01,0.02,0.01));
-    //float3x3 RotationMatrix = DFToFloat3x3(Primitive.WorldToLocal);
-    
-
 	// Calculate covariance matrix
     float3x3 T = mul(RotationMatrix, ScaleMatrix);
     float3x3 Covariance3D = mul(T, transpose(T));
 
     if (IsOrthoProjection(ViewToClip))
     {
-        //float3x3 W = transpose((float3x3) TranslatedWorldToView); 
-        //float3x3 covView = mul(W, mul(Covariance3D, transpose(W)));
-
         //100 uuscale
         //128 size of smallest VSM page
-
-        float3x3 ImMakingShitUpViewMatrix = float3x3(
+        float3x3 OrthoProjectionMatrix = float3x3(
         float3(100.f / 128.f, 0,0),
         float3(0, 100.f / 128.f,0),
         float3(0,0, 100.f)
 		);
 
 
-        float3x3 JW = mul(ImMakingShitUpViewMatrix, transpose((float3x3) TranslatedWorldToView));
+        float3x3 JW = mul(OrthoProjectionMatrix, transpose((float3x3) TranslatedWorldToView));
         float3x3 covView = mul(JW, mul(transpose(Covariance3D), transpose(JW)));
 
         float X = covView[0][0]         ;
@@ -207,10 +195,6 @@ ComputeSplatParameters(
         float4 worldOffset = float4(0, 0, 0, 1);
 
         OutWorldPosition = float4(0, 0, 0, 0);
-        //OutSvPosition = float2(0, 0);
-        //OutMeanScreenPosition = float2(0, 0);
-        //OutConic = float3(0, 0, 0);
-        //OutWorldNormal = float3(0, 0, 0);
 
         if (Lambda2 > 0.0f)
         {
@@ -219,7 +203,6 @@ ComputeSplatParameters(
             float2 MinorAxis = 3 * sqrt(Lambda2) * float2(DiagonalVector.y, -DiagonalVector.x);
 
 			//LocalPosition is Corners of a quad (-1,1)
-            //worldOffset.xyz = LocalPosition.x * float3(0, MajorAxis) + LocalPosition.y * float3(0, MinorAxis);
             worldOffset.xyz = LocalPosition.x * float3(MajorAxis,0) + LocalPosition.y * float3(MinorAxis, 0);
         };
 
@@ -292,8 +275,6 @@ ComputeSplatParameters(
               float4 worldOffset = float4(0, 0, 0, 1);
 
               OutWorldPosition = float4(0, 0, 0, 0);
-              //OutSvPosition = float2(0, 0);
-              //OutMeanScreenPosition = float2(0, 0);
 
               OutConic = float3(0, 0, 0);
               OutWorldNormal = float3(0, 0, 0);
@@ -308,41 +289,12 @@ ComputeSplatParameters(
               	 worldOffset.xyz = LocalPosition.x * float3(MajorAxis, 0) + LocalPosition.y * float3(MinorAxis, 0);
               };
 
-
-			//worldOffset.xyz = GetCameraRight(ViewToTranslatedWorld) * LocalPosition.x + GetCameraUp(ViewToTranslatedWorld) * LocalPosition.y;
-			//to UU
-            //worldOffset.xyz *= ViewZ;
-            //worldOffset.xyz *= SplatZScale;
-            
-
           	float3x3 CamM = (float3x3) ViewToTranslatedWorld;
 			//View Space is Local Space
           	worldOffset.xyz = mul(worldOffset.xyz, CamM);
             worldOffset /= worldOffset.w;
 
-           	//worldOffset = DFTransformLocalToTranslatedWorld(worldOffset.xyz, b Primitive.LocalToWorld, ResolvedView.PreViewTranslation);
-
-			//OutSvPosition = float2(0, 0);
-          	//OutMeanScreenPosition = float2(0, 0);
-          	//TranslatedWorldPosition.xyz *= 100.f;
             OutWorldPosition = float4(TranslatedWorldPositionNaniteView + worldOffset.xyz - DFFastSubtractDemote(PreViewTranslation, ResolvedView.PreViewTranslation), 1);
-          	//OutWorldPosition = TranslatedWorldPosition * 100.f +float4(worldOffset.xyz, 1);
-          	//OutWorldPosition = DFTransformLocalToTranslatedWorld(worldOffset.xyz, Primitive.LocalToWorld, ResolvedView.PreViewTranslation);
-
-          	//float4 TWP = DFTransformLocalToTranslatedWorld(GSResources.Positions[SplatIndex], Primitive.LocalToWorld, PreViewTranslation);
-
-          	//TWP.w *= 100.f; //essentailly scales the whole thing down by a 100;
-
-           	//OutWorldPosition = worldOffset;
-
-            //float4 MeanSP = mul(TWP, TranslatedWorldToClip);
-            //MeanSP.xyz /= MeanSP.w;
-            //OutMeanScreenPosition.xy = (float2(MeanSP.x, -MeanSP.y) + 1) * 0.5f * float2(2.f / ViewToClip[0][0], 2.f / ViewToClip[1][1]); // ViewSize Ortho matrix X and Y are 2/Width and 2/Height respectively
-            
-            //float4 VertSP = mul(TWP + float4(worldOffset.xyz, 1), TranslatedWorldToClip);
-            //VertSP.xyz /= VertSP.w;
-            //OutSvPosition.xy = (float2(VertSP.x, -VertSP.y) + 1) * 0.5 * float2(2.f / ViewToClip[0][0], 2.f / ViewToClip[1][1]);
-            
             OutConic = Conic;
             OutWorldNormal = RotateLocalToWorld(GSResources.Normals[SplatIndex], Primitive.LocalToWorld, Primitive.InvNonUniformScale);
 		}
@@ -352,8 +304,6 @@ ComputeSplatParameters(
 /** Attributes to interpolate from the vertex shader to the pixel shader. */
 struct FVertexFactoryInterpolantsVSToPS
 {
-	//float2 VertexSvPosition : POSITION; // Used to calculate distance from mean in pixel shader - different from SV_Position in VSM rendering
-	//float2 MeanScreenSpacePosition : MEAN;
     nointerpolation float3 Conic : CONIC;
     float  Opacity : OPACITY;
 
@@ -415,7 +365,6 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 #if SHADOW_DEPTH_SHADER
 		NaniteView.TranslatedWorldToView,
 		NaniteView.ViewToClip,
-		//NaniteView.ViewSizeAndInvSize ,
 		float4(128, 128, 1.f/128.f, 1.f/128.f), // VSM page is 128 pixels squared, its size is fixed in WS
 		float2(1.0f / NaniteView.ViewToClip[0][0], 1.0f / NaniteView.ViewToClip[1][1]),
 		NaniteView.ViewToTranslatedWorld,
@@ -426,7 +375,6 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
         ResolvedView.ViewToClip,
         ResolvedView.ViewSizeAndInvSize,
         ResolvedView.TanAndInvTanHalfFOV.xy,
-        //float2(1.0f / ResolvedView.ViewToClip[0][0], 1.0f / ResolvedView.ViewToClip[1][1]),
 		ResolvedView.ViewToTranslatedWorld,
 		ResolvedView.PreViewTranslation,
 		ResolvedView.TranslatedWorldToClip,
@@ -437,8 +385,6 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
         Intermediates.LocalPos.xy * 0.5,
         // Outputs
         Intermediates.WorldPosition,
-		//Intermediates.VertexSvPosition,
-        //Intermediates.MeanScreenSpacePosition,
         Intermediates.Conic,
         Intermediates.Normal
 	);
@@ -689,15 +635,7 @@ FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVS
 
 	float2 UV = abs(Result.TexCoords[0] - 0.5);
 	float Power = 1.f-length(UV);
-	//float2 DistanceFromMean = (Interpolants.MeanScreenSpacePosition.xy - Interpolants.VertexSvPosition.xy);
-    //float Power = dot(Interpolants.Conic.xzy, float3(DistanceFromMean * DistanceFromMean, DistanceFromMean.x * DistanceFromMean.y));
-    //float Alpha = Power * Interpolants.Opacity;
-
     float Alpha = EvaluateGaussian2D_Normalized3Sigma((Result.TexCoords[0] - 0.5)*2.f, Interpolants.Conic) * Interpolants.Opacity;
-
-    //SvPosition.z*= Alpha * 1000000.f;
-    //SvPosition.z *= 0.0001;
-    //SvPosition.z -= Alpha * 0.01;
 #endif	//NUM_MATERIAL_TEXCOORDS
 
 	//Result.VertexColor = float4(Alpha, 1, 1, 1);
