@@ -44,6 +44,19 @@ void FSubstratePixelHeader::UpdateAllBSDFsOperatorCoverageTransmittance_FullySim
 void FSubstratePixelHeader::UpdateAllOperatorsCoverageTransmittance_FullySimplified() {}
 void FSubstratePixelHeader::UpdateAllBSDFWithBottomUpOperatorVisit_FullySimplified() {}
 
+// Substrate parameters
+uint MaxBytesPerPixel;
+uint MaxClosurePerPixel;
+uint bRoughDiffuse;
+uint PeelLayersAboveDepth;
+uint bRoughnessTracking;
+uint bStochasticLighting;
+
+int SliceStoringDebugSubstrateTreeDataWithoutMRT;
+int FirstSliceStoringSubstrateSSSDataWithoutMRT;
+RWTexture2DArray<uint> MaterialTextureArrayUAVWithoutRTs;
+RWTexture2D<float3> OpaqueRoughRefractionTextureUAV;
+
 #endif
 
 SCREEN_PASS_TEXTURE_VIEWPORT(InputViewPort)
@@ -196,15 +209,15 @@ void GSplatCompositionPS(
 	// Generate the Substrate material data to write out
 	FSubstrateIntegrationSettings Settings = InitSubstrateIntegrationSettings(
 		false /*bForceFullyRough*/, 
-		GaussianSplattingSubstrate.bRoughDiffuse, 
-		GaussianSplattingSubstrate.PeelLayersAboveDepth, 
-		GaussianSplattingSubstrate.bRoughnessTracking
+		bRoughDiffuse, 
+		PeelLayersAboveDepth, 
+		bRoughnessTracking
 	);
 
 	// Output substrate data to adaptive GBuffer
 
-	FSubstrateAddressing SubstrateAddressing = GetSubstratePixelDataByteOffset(SvPosition.xy, uint2(PrimaryView.BufferSizeAndInvSize.xy), GaussianSplattingSubstrate.MaxBytesPerPixel);
-	FRWSubstrateMaterialContainer RWSubstrateMaterialContainer = InitialiseRWSubstrateMaterialContainer(GaussianSplattingSubstrate.MaterialTextureArrayUAVWithoutRTs, 1, SvPosition.xy);
+	FSubstrateAddressing SubstrateAddressing = GetSubstratePixelDataByteOffset(SvPosition.xy, uint2(PrimaryView.BufferSizeAndInvSize.xy), MaxBytesPerPixel);
+	FRWSubstrateMaterialContainer RWSubstrateMaterialContainer = InitialiseRWSubstrateMaterialContainer(MaterialTextureArrayUAVWithoutRTs, 1, SvPosition.xy);
 
 	const float Dither = 0.0f;
 
@@ -217,7 +230,7 @@ void GSplatCompositionPS(
 
 	PackSubstrateOut(
 		RWSubstrateMaterialContainer,
-		GaussianSplattingSubstrate.MaterialTextureArrayUAVWithoutRTs,
+		MaterialTextureArrayUAVWithoutRTs,
 		Dither,
 		Settings,
 		SubstrateAddressing,
