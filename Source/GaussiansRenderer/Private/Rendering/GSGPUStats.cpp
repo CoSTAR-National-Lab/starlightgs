@@ -6,14 +6,14 @@
 #include "GSViewExtension.h"
 
 
-void FGSGPUStats::ProcessBeginRender(FRDGBuilder& GraphBuilder)
+void FGSGPUStats::PollStats(FRHICommandListImmediate& RHICmdList)
 {
 	check(IsInRenderingThread());
-	checkf(!StatsTransientBuffer, TEXT("Transient buffer has already been allocated - did you call ProcessBeginRender twice in the same frame?"));
 
 	TStaticArray<uint32, Stat_Count> StatValues{ 0 };
 
 	// Poll stats in flight to see if any are complete
+	// StatsReadback is only read/written in render thread - no need for mutex
 	while (FGPUStat* Stat = StatsReadback.Peek())
 	{
 		// Stats are inserted chronologically - so front of queue should be completed first
@@ -21,10 +21,10 @@ void FGSGPUStats::ProcessBeginRender(FRDGBuilder& GraphBuilder)
 		if (!Stat->Fence->Poll())
 			break;
 
-		uint32* StatData = static_cast<uint32*>(RHILockStagingBuffer(Stat->StagingBuffer, 0, Stat_Count * sizeof(uint32)));
+		uint32* StatData = static_cast<uint32*>(RHICmdList.LockStagingBuffer(Stat->StagingBuffer, Stat->Fence, 0, Stat_Count * sizeof(uint32)));
 		FMemory::Memcpy(StatValues.GetData(), StatData, Stat_Count * sizeof(uint32));
 
-		RHIUnlockStagingBuffer(Stat->StagingBuffer);
+		RHICmdList.UnlockStagingBuffer(Stat->StagingBuffer);
 
 		// Sample has been processed
 		StatsReadback.Pop();
@@ -39,6 +39,12 @@ void FGSGPUStats::ProcessBeginRender(FRDGBuilder& GraphBuilder)
 	{
 		SET_DWORD_STAT(STAT_SplatsRenderedUnlit, StatValues[Stat_UnlitSplatsRendered]);
 	}
+}
+
+void FGSGPUStats::ProcessBeginRender(FRDGBuilder& GraphBuilder)
+{
+	check(IsInRenderingThread());
+	checkf(!StatsTransientBuffer, TEXT("Transient buffer has already been allocated - did you call ProcessBeginRender twice in the same frame?"));
 
 	// Create a new buffer to hold transient stats
 	StatsTransientBuffer = GraphBuilder.CreateBuffer(
@@ -69,6 +75,8 @@ void FGSGPUStats::ProcessEndRender(FRDGBuilder& GraphBuilder)
 			CommandList.CopyToStagingBuffer(StatsBuffer->GetRHI(), StagingBuffer, 0, Stat_Count * sizeof(uint32));
 			CommandList.WriteGPUFence(Fence);
 		});
+
+	// StatsReadback is only read/written in render thread - no need for mutex
 	StatsReadback.Enqueue(Stats);
 
 	// Do not use after this point

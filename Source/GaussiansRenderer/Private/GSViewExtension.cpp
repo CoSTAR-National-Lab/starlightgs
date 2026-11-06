@@ -52,9 +52,11 @@ void FGSViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 	TArray<FGSClippingVolumeProxy> ClippingVolumeProxies = ClippingVolumeContainer->BuildClippingVolumeProxies();
 	Algo::Sort(ClippingVolumeProxies, [](const auto& VolA, const auto& VolB){ return VolA.Priority < VolB.Priority; });
 
-	ENQUEUE_RENDER_COMMAND(CopyGaussianSplatClippingVolumes)([this, TempVolumes = MoveTemp(ClippingVolumeProxies)](FRHICommandList& RHICommandList)
+	ENQUEUE_RENDER_COMMAND(CopyGaussianSplatClippingVolumes)([this, TempVolumes = MoveTemp(ClippingVolumeProxies)](FRHICommandListImmediate& RHICommandList)
 	{
 		ClippingVolumeParameters = TempVolumes;
+
+		GPUStats->PollStats(RHICommandList);
 	});
 }
 
@@ -76,7 +78,6 @@ void FGSViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& Grap
                                                                const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
 	RDG_EVENT_SCOPE_STAT(GraphBuilder, GaussiansLit, "Gaussians(Lit)");
-	RDG_GPU_STAT_SCOPE(GraphBuilder, GaussiansLit);
 	SCOPED_NAMED_EVENT(GaussiansLit, FColor::Purple);
 
 	check(InView.bIsViewInfo);
@@ -249,16 +250,16 @@ void FGSViewExtension::CopySplatGPUToCPU(
 
 			// Now take the data from the buffers to populate CPU arrays that will form the asset
 			// First read the splat count to know how big to make the arrays
-			uint32 SplatCount = *static_cast<uint32*>(RHILockStagingBuffer(ReadbackData.SplatCount, 0, sizeof(uint32)));
-			RHIUnlockStagingBuffer(ReadbackData.SplatCount);
+			uint32 SplatCount = *static_cast<uint32*>(RHICmdList.LockStagingBuffer(ReadbackData.SplatCount, ReadbackData.Fence, 0, sizeof(uint32)));
+			RHICmdList.UnlockStagingBuffer(ReadbackData.SplatCount);
 
-			auto DoCopyIntoBuffer = [&]<typename T>(FRHIStagingBuffer * StagingBuffer, TArray<T>&DestArray)
+			auto DoCopyIntoBuffer = [&]<typename T>(FRHIStagingBuffer* StagingBuffer, TArray<T>&DestArray)
 			{
 				DestArray.SetNumUninitialized(SplatCount);
 
-				void* DataPtr = RHILockStagingBuffer(StagingBuffer, 0, SplatCount * sizeof(T));
+				void* DataPtr = RHICmdList.LockStagingBuffer(StagingBuffer, ReadbackData.Fence, 0, SplatCount * sizeof(T));
 				FMemory::Memcpy(DestArray.GetData(), DataPtr, SplatCount * sizeof(T));
-				RHIUnlockStagingBuffer(StagingBuffer);
+				RHICmdList.UnlockStagingBuffer(StagingBuffer);
 			};
 
 			DoCopyIntoBuffer(ReadbackData.Positions, Positions);

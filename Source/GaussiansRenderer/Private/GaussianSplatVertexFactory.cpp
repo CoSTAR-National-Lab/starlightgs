@@ -99,7 +99,7 @@ void FGaussianSplatVertexFactory::ValidateCompiledResult(const FVertexFactoryTyp
                                                          const FShaderParameterMap& ParameterMap, TArray<FString>& OutErrors)
 {
 	if (Type->SupportsPrimitiveIdStream()
-		&& UseGPUScene(Platform, GetMaxSupportedFeatureLevel(Platform))
+		&& UseGPUScene(Platform)
 		&& !IsMobilePlatform(Platform) // On mobile VS may use PrimtiveUB while GPUScene is enabled
 		&& ParameterMap.ContainsParameterAllocation(FPrimitiveUniformShaderParameters::FTypeInfo::GetStructMetadata()->GetShaderVariableName()))
 	{
@@ -115,7 +115,7 @@ void FGaussianSplatVertexFactory::ModifyCompilationEnvironment(
 		OutEnvironment.SetDefineIfUnset(TEXT("MANUAL_VERTEX_FETCH"), TEXT("1"));
 	}
 
-	const bool bVFSupportsPrimtiveSceneData = Parameters.VertexFactoryType->SupportsPrimitiveIdStream() && UseGPUScene(Parameters.Platform  , GetMaxSupportedFeatureLevel(Parameters.Platform));
+	const bool bVFSupportsPrimtiveSceneData = Parameters.VertexFactoryType->SupportsPrimitiveIdStream() && UseGPUScene(Parameters.Platform);
 	OutEnvironment.SetDefine(TEXT("VF_SUPPORTS_PRIMITIVE_SCENE_DATA"), bVFSupportsPrimtiveSceneData);
 }
 
