@@ -12,6 +12,9 @@ Gaussian splat renderer for Unreal Engine 5.7+ with a focus on relighting and na
 > [!TIP]
 > Create your own relightable gaussian splats with our [training pipeline](https://github.com/CoSTAR-National-Lab/starlightgs-training), built on [GS-IR](https://github.com/lzhnb/gs-ir).
 
+> [!NOTE]
+> If you have found StarLightGS useful, please fill out our [feedback form](https://forms.cloud.microsoft/e/kxi32Rh0Kw) to help support our work.
+
 ## Description
 This plugin features:
 - High performance rendering handling 10+ million splats.
